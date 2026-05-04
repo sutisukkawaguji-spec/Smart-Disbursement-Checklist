@@ -1,0 +1,405 @@
+/* PrintForms.css - Official Government Style with THSarabunIT๙ */
+
+@font-face {
+  font-family: 'THSarabunIT๙';
+  src: url('/fonts/THSarabunIT๙.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'THSarabunIT๙';
+  src: url('/fonts/THSarabunIT๙ Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'THSarabunIT๙';
+  src: url('/fonts/THSarabunIT๙ Italic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'THSarabunIT๙';
+  src: url('/fonts/THSarabunIT๙ BoldItalic.ttf') format('truetype');
+  font-weight: bold;
+  font-style: italic;
+}
+
+.print-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  background: #f0f0f0;
+  padding: 40px;
+  font-family: 'THSarabunIT๙', sans-serif;
+  color: black;
+}
+
+.print-page {
+  background: white;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  position: relative;
+  box-sizing: border-box;
+  color: #000;
+  line-height: 0.9;
+  /* Thai Sarabun usually needs tighter line height */
+}
+
+.a4-portrait {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 20mm 20mm 20mm 25mm;
+}
+
+.a4-landscape {
+  width: 297mm;
+  min-height: 210mm;
+  padding: 20mm 20mm;
+}
+
+/* Official Typography */
+.print-page h2 {
+  font-size: 20pt;
+  font-weight: bold;
+  margin: 0;
+}
+
+.print-page h3 {
+  font-size: 18pt;
+  font-weight: bold;
+  margin: 0;
+}
+
+.print-page p,
+.print-page div,
+.print-page span,
+.print-page td,
+.print-page th {
+  font-size: 16pt;
+  /* Standard gov text size */
+}
+
+/* --- Form Itinerary Visuals --- */
+.itinerary-day-box.outbound {
+  background: linear-gradient(to right, rgba(37, 99, 235, 0.05), transparent);
+  border-left: 4px solid #2563eb !important;
+}
+.itinerary-day-box.outbound .day-badge {
+  background: #2563eb;
+  color: white;
+}
+
+.itinerary-day-box.inbound {
+  background: linear-gradient(to right, rgba(16, 185, 129, 0.05), transparent);
+  border-left: 4px solid #10b981 !important;
+}
+.itinerary-day-box.inbound .day-badge {
+  background: #10b981;
+  color: white;
+}
+
+.direction-select {
+  padding: 0.3rem 0.8rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.font-bold {
+  font-weight: bold;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.mt-1 {
+  margin-top: 4pt;
+}
+
+.mt-2 {
+  margin-top: 8pt;
+}
+
+.mt-3 {
+  margin-top: 10pt;
+}
+
+.mt-4 {
+  margin-top: 24pt;
+}
+
+.mt-5 {
+  margin-top: 20pt;
+}
+
+.mb-1 {
+  margin-bottom: 4pt;
+}
+
+.mb-2 {
+  margin-bottom: 8pt;
+}
+
+.mb-4 {
+  margin-bottom: 24pt;
+}
+
+.ml-4 {
+  margin-left: 30pt;
+}
+
+.indent-text {
+  text-indent: 1.5cm;
+}
+
+.lh-gov {
+  line-height: 1.3;
+}
+
+/* Forms UI */
+.checkbox-box {
+  display: inline-block;
+  width: 14pt;
+  height: 14pt;
+  border: 1px solid black;
+  margin-right: 4pt;
+  vertical-align: middle;
+  position: relative;
+}
+
+.checkbox-box span {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14pt;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  color: black;
+}
+
+.dotted-line {
+  border-bottom: 1px dotted #000;
+  display: inline-flex;
+  justify-content: center;
+  align-items: flex-end;
+  min-width: 0;
+  flex-shrink: 1;
+  padding: 0 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+/* Tables */
+.print-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.print-table th,
+.print-table td {
+  border: 1px solid black;
+  padding: 4pt 8pt;
+  vertical-align: middle;
+}
+
+.print-table th {
+  background: #f9f9f9;
+  font-weight: bold;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.summary-table td {
+  padding: 2pt 2pt;
+  vertical-align: bottom;
+}
+
+.summary-table .text-right {
+  white-space: nowrap;
+}
+
+.summary-table .currency-label {
+  width: 30pt;
+  padding-left: 5pt;
+}
+
+.summary-table .total-label {
+  width: 90pt;
+  white-space: nowrap;
+}
+
+.signature-block {
+  width: 300pt;
+  margin-left: auto;
+  text-align: center;
+}
+
+/* Specific page fixes */
+.doc-header-info {
+  font-size: 14pt !important;
+  line-height: 1.2;
+}
+
+/* Side Controls for Preview */
+.page-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+}
+
+.sidebar-control {
+  position: sticky;
+  top: 100px;
+  background: white;
+  padding: 1.25rem 0.75rem;
+  border-radius: 2rem;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 65px;
+  border: 1px solid #e2e8f0;
+  margin-top: 20mm;
+  z-index: 50;
+  transition: all 0.3s;
+}
+
+.sidebar-control:hover {
+  transform: translateX(5px);
+  box-shadow: 0 15px 50px rgba(0,0,0,0.2);
+}
+
+.sidebar-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11pt;
+  font-weight: bold;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.vertical-slider {
+  appearance: slider-vertical;
+  width: 12px;
+  height: 150px;
+  cursor: pointer;
+}
+
+.reset-btn-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11pt;
+  font-weight: 800;
+  color: #64748b;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.reset-btn-circle:hover {
+  background: #38bdf8;
+  border-color: #0ea5e9;
+  color: white;
+  transform: scale(1.1) rotate(15deg);
+  box-shadow: 0 5px 15px rgba(56, 189, 248, 0.4);
+}
+
+.reset-btn-circle:active {
+  transform: scale(0.95);
+}
+
+.spacing-value {
+  font-family: monospace;
+  font-size: 10pt;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  body.printing-mode * {
+    visibility: hidden;
+  }
+
+  .sidebar-control, .no-print {
+    display: none !important;
+  }
+
+  .print-container,
+  .print-container *,
+  .printable-checklist,
+  .printable-checklist * {
+    visibility: visible;
+  }
+
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding: 0;
+    background: white;
+    width: 100%;
+    display: block !important;
+  }
+
+  .print-page {
+    box-shadow: none;
+    margin: 0;
+    page-break-after: always;
+  }
+
+  /* Force landscape for specific sections if needed */
+  .a4-landscape {
+    page-break-before: always;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
