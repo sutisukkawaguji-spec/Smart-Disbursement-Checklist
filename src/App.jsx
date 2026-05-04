@@ -108,6 +108,7 @@ function App() {
   const [activeView, setActiveView] = useState('menu'); // 'menu' | 'travel-request' | 'history' | 'reimbursement' | 'print-preview'
   const [travelRequests, setTravelRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const printRef = React.useRef();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -119,7 +120,7 @@ function App() {
   useEffect(() => {
     const fetchDownloads = async () => {
       try {
-        const response = await fetch('/downloads/manifest.json');
+        const response = await fetch('./downloads/manifest.json');
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data) && data.length > 0) {
