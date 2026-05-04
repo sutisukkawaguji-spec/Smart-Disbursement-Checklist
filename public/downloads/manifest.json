@@ -3,18 +3,18 @@
     "category": "แบบฟอร์มเอกสาร (Forms)",
     "files": [
       {
-        "name": "ใบเบิกค่าเดินทางไปราชการ 8708 ส่วนที่ 1.pdf",
-        "url": "/Smart-Disbursement-Checklist/downloads/forms/ใบเบิกค่าเดินทางไปราชการ 8708 ส่วนที่ 1.pdf",
+        "name": "ใบเบิกค่าใช้จ่ายในการเดินทาง (แบบ 8708)",
+        "url": "/Smart-Disbursement-Checklist/downloads/forms/form_8708_part1.pdf",
         "type": "PDF"
       },
       {
-        "name": "บก111 (ค่าพาหนะ).pdf",
-        "url": "/Smart-Disbursement-Checklist/downloads/forms/บก111 (ค่าพาหนะ).pdf",
+        "name": "ใบรับรองแทนใบเสร็จรับเงิน (แบบ บก.111)",
+        "url": "/Smart-Disbursement-Checklist/downloads/forms/form_bk111.pdf",
         "type": "PDF"
       },
       {
-        "name": "ใบเบิกค่าเดินทางไปราชการ 8708 ส่วนที่ 1 ใบขวางหากเดินทางเป็นคณะ.pdf",
-        "url": "/Smart-Disbursement-Checklist/downloads/forms/ใบเบิกค่าเดินทางไปราชการ 8708 ส่วนที่ 1 ใบขวางหากเดินทางเป็นคณะ.pdf",
+        "name": "แบบ 8708 ส่วนที่ 1 (ใบขวางสำหรับคณะเดินทาง)",
+        "url": "/Smart-Disbursement-Checklist/downloads/forms/form_8708_part1_group.pdf",
         "type": "PDF"
       }
     ]
