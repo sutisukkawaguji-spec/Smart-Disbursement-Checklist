@@ -21,6 +21,17 @@
   },
   {
     "category": "ระเบียบและกฎหมาย (Regulations)",
-    "files": []
+    "files": [
+      {
+        "name": "พระราชกฤษฎีกา ค่าใช้จ่ายในการเดินทางไปราชการ พ.ศ. ๒๕๒๖ (แก้ไขเพิ่มเติมถึงฉบับที่ 9 พ.ศ. ๒๕๖๐)",
+        "url": "/Smart-Disbursement-Checklist/downloads/forms/2526.pdf",
+        "type": "PDF"
+      },
+      {
+        "name": "ระเบียบกระทรวงการคลัง ว่าด้วยการเบิกค่าใช้จ่ายในการเดินทางไปราชการ พ.ศ. ๒๕๕๐",
+        "url": "/Smart-Disbursement-Checklist/downloads/forms/2550",
+        "type": "PDF"
+      }
+    ]
   }
 ]
