@@ -361,45 +361,48 @@
 @media print {
   @page {
     margin: 0;
+    size: auto;
   }
 
-  body.printing-mode * {
+  /* Hide everything by default */
+  body * {
     visibility: hidden;
   }
 
-  .sidebar-control, .no-print {
-    display: none !important;
-  }
-
+  /* Only show the print container and its children */
   .print-container,
-  .print-container *,
-  .printable-checklist,
-  .printable-checklist * {
+  .print-container * {
     visibility: visible;
   }
 
+  /* Position the print container to the top left */
   .print-container {
-    position: absolute;
-    left: 0;
-    top: 0;
-    padding: 0;
-    background: white;
-    width: 100%;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: white !important;
     display: block !important;
   }
 
-  .print-page {
-    box-shadow: none;
-    margin: 0;
-    page-break-after: always;
-  }
-
-  /* Force landscape for specific sections if needed */
-  .a4-landscape {
-    page-break-before: always;
-  }
-
-  .no-print {
+  /* Hide specific UI elements even if they are inside visible containers */
+  .no-print, 
+  .sidebar-control,
+  .white-bg-actions {
     display: none !important;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    page-break-after: always !important;
+    border: none !important;
+  }
+
+  /* Fix for landscape pages */
+  .a4-landscape {
+    page-break-before: always !important;
   }
 }
