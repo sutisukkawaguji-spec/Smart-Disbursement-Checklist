@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plane, Home, MapPin, ChevronRight, CheckCircle, ArrowLeft, FileText, ShieldCheck, PlusCircle, List, Edit, Printer, Download, Upload, Plus, Folder, Search, Database } from 'lucide-react';
+import { Plane, Home, MapPin, ChevronRight, CheckCircle, ArrowLeft, FileText, ShieldCheck, PlusCircle, List, Edit, Printer, Download, Upload, Plus, Folder, Search, Database, MessageSquare, ClipboardList, ExternalLink, Trash2, RefreshCcw, Star, Book, X } from 'lucide-react';
 import { DISBURSEMENT_CATEGORIES } from './data/config';
 import TravelRequestForm from './components/TravelRequestForm';
 import ReimbursementForm from './components/ReimbursementForm';
@@ -11,6 +11,8 @@ const IconMap = {
   Plane: Plane,
   Home: Home,
   MapPin: MapPin,
+  MessageSquare: MessageSquare,
+  ClipboardList: ClipboardList
 };
 
 // --- Knowledge Base & Downloads Content ---
@@ -109,6 +111,18 @@ function App() {
   const [travelRequests, setTravelRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [tourStep, setTourStep] = useState(0); // 0 = off, 1-5 = steps
+  const [showAssistant, setShowAssistant] = useState(true);
+  const [assistantMsg, setAssistantMsg] = useState('สวัสดีครับ มีอะไรให้ช่วยไหมครับ?');
+  const [showSurvey, setShowSurvey] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const [pendingClearAll, setPendingClearAll] = useState(false);
+  const [tourPos, setTourPos] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [rating, setRating] = useState(0);
+  const [showSurveyPanel, setShowSurveyPanel] = useState(false);
+  const [surveyRating, setSurveyRating] = useState(0);
+  const [surveyComment, setSurveyComment] = useState('');
   const printRef = React.useRef();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -135,23 +149,52 @@ function App() {
   }, []);
 
   // Load from localStorage on mount
-  React.useEffect(() => {
-    const saved = localStorage.getItem('sdc_history_v2');
+  useEffect(() => {
+    const savedV2 = localStorage.getItem('sdc_history_v2');
+    const savedV1 = localStorage.getItem('sdc_history');
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setTravelRequests(parsed);
-        }
-      } catch (e) { console.error("Failed to load history", e); }
+    try {
+      if (savedV2) {
+        const parsed = JSON.parse(savedV2);
+        if (Array.isArray(parsed)) setTravelRequests(parsed);
+      } else if (savedV1) {
+        const parsed = JSON.parse(savedV1);
+        if (Array.isArray(parsed)) setTravelRequests(parsed);
+      }
+    } catch (e) {
+      console.error("Failed to load history", e);
+    } finally {
+      setIsLoaded(true);
     }
   }, []);
 
   // Save to localStorage
-  React.useEffect(() => {
-    localStorage.setItem('sdc_history_v2', JSON.stringify(travelRequests));
-  }, [travelRequests]);
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('sdc_history_v2', JSON.stringify(travelRequests));
+    }
+  }, [travelRequests, isLoaded]);
+
+  // Update Tour Position
+  useEffect(() => {
+    if (tourStep > 0) {
+      // Give time for view to switch and elements to render
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`tour-step-${tourStep}`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          setTourPos({
+            top: rect.top + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width,
+            height: rect.height
+          });
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [tourStep, activeView, showResult]);
 
   const exportSingleRequest = (req) => {
     try {
@@ -159,7 +202,7 @@ function App() {
       const blob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      const fileName = `${req.name}_${req.departDate}_${req.id.toString().slice(-4)}.json`.replace(/\s+/g, '_');
+      const fileName = `${req.name || 'travel'}_${req.departDate || ''}_${req.id.toString().slice(-4)}.json`.replace(/\s+/g, '_');
       link.href = url;
       link.download = fileName;
       document.body.appendChild(link);
@@ -241,62 +284,83 @@ function App() {
   };
 
   const processHandles = async (handles) => {
+    let count = 0;
     for (const handle of handles) {
-      const file = await handle.getFile();
-      const content = await file.text();
       try {
+        const file = await handle.getFile();
+        const content = await file.text();
         const imported = JSON.parse(content);
-        const processItem = (item) => {
-          if (item.id && item.name) {
-            setTravelRequests(prev => {
-              const existingIds = new Set(prev.map(r => r.id));
-              if (!existingIds.has(item.id)) return [item, ...prev];
-              return prev.map(r => r.id === item.id ? item : r);
-            });
-            fileHandlesRef.current.set(item.id, handle);
-          }
-        };
 
-        if (Array.isArray(imported)) imported.forEach(processItem);
-        else processItem(imported);
+        const items = Array.isArray(imported) ? imported : [imported];
+        items.forEach(item => {
+          if (item && (item.id || item.createdAt)) {
+            const newItem = { ...item, id: item.id || Date.now() + Math.random() };
+            setTravelRequests(prev => {
+              const current = Array.isArray(prev) ? prev : [];
+              const exists = current.find(r => r.id === newItem.id);
+              if (exists) return current.map(r => r.id === newItem.id ? newItem : r);
+              return [newItem, ...current];
+            });
+            if (item.id) fileHandlesRef.current.set(item.id, handle);
+            count++;
+          }
+        });
       } catch (err) {
         console.error('Error parsing file:', handle.name, err);
       }
     }
-    alert('นำเข้าข้อมูลเรียบร้อยแล้ว');
+    if (count > 0) {
+      alert(`นำเข้าข้อมูลเรียบร้อยแล้วจำนวน ${count} รายการ`);
+      setActiveView('history');
+      setSearchTerm(''); // Show all after import
+    } else {
+      alert('ไม่พบข้อมูลที่สามารถนำเข้าได้ในไฟล์ที่เลือก');
+    }
   };
 
-  const importHistory = (e) => {
+  const importHistory = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const imported = JSON.parse(evt.target.result);
-          const processItem = (item) => {
-            if (item.id && item.name) {
-              setTravelRequests(prev => {
-                const existingIds = new Set(prev.map(r => r.id));
-                if (!existingIds.has(item.id)) return [item, ...prev];
-                return prev.map(r => r.id === item.id ? item : r);
-              });
-            }
-          };
+    let count = 0;
+    const promises = Array.from(files).map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const imported = JSON.parse(evt.target.result);
+            const items = Array.isArray(imported) ? imported : [imported];
 
-          if (Array.isArray(imported)) {
-            imported.forEach(processItem);
-          } else {
-            processItem(imported);
+            items.forEach(item => {
+              if (item && (item.id || item.createdAt)) {
+                const newItem = { ...item, id: item.id || Date.now() + Math.random() };
+                setTravelRequests(prev => {
+                  const current = Array.isArray(prev) ? prev : [];
+                  const exists = current.find(r => r.id === newItem.id);
+                  if (exists) return current.map(r => r.id === newItem.id ? newItem : r);
+                  return [newItem, ...current];
+                });
+                count++;
+              }
+            });
+          } catch (err) {
+            console.error('Error importing file:', file.name, err);
           }
-        } catch (err) {
-          console.error('Error importing file:', file.name);
-        }
-      };
-      reader.readAsText(file);
+          resolve();
+        };
+        reader.readAsText(file);
+      });
     });
-    alert('ดำเนินการนำเข้าข้อมูลเรียบร้อยแล้ว');
+
+    await Promise.all(promises);
+    if (count > 0) {
+      alert(`นำเข้าข้อมูลเรียบร้อยแล้วจำนวน ${count} รายการ`);
+      setActiveView('history');
+      setSearchTerm(''); // Clear search to show all
+    } else {
+      alert('ไม่พบข้อมูลที่สามารถนำเข้าได้');
+    }
+    e.target.value = ''; // Reset input
   };
 
   const handleLogin = (role) => {
@@ -309,7 +373,7 @@ function App() {
     [selectedCategory]);
 
   const checklist = useMemo(() => {
-    if (!category) return [];
+    if (!category) return { forms: [], evidence: [] };
     const forms = new Set();
     const evidence = new Set();
 
@@ -318,7 +382,20 @@ function App() {
 
     category.rules.forEach(rule => {
       const conditionMet = rule.condition.id === category.id ||
-        Object.entries(rule.condition).every(([qId, val]) => answers[qId] === val);
+        Object.entries(rule.condition).every(([qId, val]) => {
+          // 1. Check direct questionnaire answers
+          if (answers[qId] === val) return true;
+
+          // 2. Also check synced data from the travel form (if exists)
+          if (selectedRequest) {
+            if (qId === 'accommodation') {
+              if (val === 'actual' && selectedRequest.accommodationType === 'จ่ายจริง') return true;
+              if (val === 'flat' && selectedRequest.accommodationType === 'เหมาจ่าย') return true;
+              if (val === 'none' && !selectedRequest.isOvernight) return true;
+            }
+          }
+          return false;
+        });
 
       if (conditionMet) {
         rule.require.forEach(item => {
@@ -334,11 +411,130 @@ function App() {
   }, [category, answers]);
 
   const handleSelectCategory = (id) => {
+    const cat = DISBURSEMENT_CATEGORIES.find(c => c.id === id);
+    if (cat && cat.id === 'survey') {
+      setActiveView('survey');
+      window.scrollTo(0, 0);
+      return;
+    }
     setSelectedCategory(id);
-    setActiveView('checklist');
+      setSelectedRequest(null);
+    setActiveView('category-view');
+    window.scrollTo(0, 0);
+  };
+
+  const handleBack = () => {
+    switch (activeView) {
+      case 'category-view':
+      case 'history':
+      case 'knowledge-center':
+      case 'survey':
+        reset();
+        break;
+      case 'checklist':
+        setActiveView('category-view');
+        break;
+      case 'travel-request':
+        // If they came from checklist, go back there. Otherwise category-view.
+        setActiveView(showResult ? 'checklist' : 'category-view');
+        break;
+      case 'reimbursement':
+      case 'print-preview':
+        setActiveView('history');
+        break;
+      default:
+        reset();
+    }
+  };
+
+  const handleSubmitHeaderSurvey = async () => {
+    if (surveyRating === 0) {
+      alert('กรุณาเลือกคะแนนความพึงพอใจด้วยครับ');
+      return;
+    }
+    
+    const surveyData = {
+      rating: surveyRating,
+      comment: surveyComment,
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent
+    };
+
+    console.log('Survey Submitted:', surveyData);
+    
+    // ตรงนี้คือจุดเชื่อมต่อ Google Sheets (AppScript) ในอนาคต
+    // fetch('YOUR_APPS_SCRIPT_URL', { 
+    //   method: 'POST', 
+    //   mode: 'no-cors',
+    //   body: JSON.stringify(surveyData) 
+    // });
+
+    alert('ขอบคุณสำหรับข้อเสนอแนะนะครับ! ความคิดเห็นของท่านจะนำไปปรับปรุงระบบต่อไป');
+    setShowSurveyPanel(false);
+    setSurveyRating(0);
+    setSurveyComment('');
+  };
+
+  const getNextSequence = (catId) => {
+    const categoryRequests = travelRequests.filter(r => r.categoryId === catId);
+    if (categoryRequests.length === 0) return 1;
+    const sequences = categoryRequests.map(r => r.sequence).filter(s => typeof s === 'number');
+    if (sequences.length === 0) return 1;
+    return Math.max(...sequences) + 1;
+  };
+
+  const startNewRecord = () => {
+    setSelectedRequest(null);
     setAnswers({});
     setStep(0);
     setShowResult(false);
+    setActiveView('checklist');
+  };
+
+  const handleCheckDoc = (requestId, docText, isChecked) => {
+    setTravelRequests(prev => prev.map(req => {
+      if (req.id === requestId) {
+        const currentChecked = req.checkedDocs || [];
+        const newChecked = isChecked
+          ? [...currentChecked, docText]
+          : currentChecked.filter(t => t !== docText);
+        const updated = { ...req, checkedDocs: newChecked, updatedAt: new Date().toISOString() };
+        if (selectedRequest?.id === requestId) setSelectedRequest(updated);
+        return updated;
+      }
+      return req;
+    }));
+  };
+
+  const handleResetChecklist = () => {
+    if (!selectedRequest) return;
+    const requestId = selectedRequest.id;
+    setTravelRequests(prev => prev.map(req => {
+      if (req.id === requestId) {
+        const updated = { ...req, checkedDocs: [], updatedAt: new Date().toISOString() };
+        setSelectedRequest(updated);
+        return updated;
+      }
+      return req;
+    }));
+  };
+
+  const handleRestartSurvey = () => {
+    // If it's an existing record, we don't clear answers so they can edit them.
+    // If it's a new flow (not saved yet), we keep whatever they've typed.
+    setStep(0);
+    setShowResult(false);
+    // CRITICAL: Do NOT call setSelectedRequest(null) here, 
+    // because we want to update the same record if it exists.
+  };
+
+  const clearAllHistory = () => {
+    if (window.confirm('คุณต้องการลบประวัติทั้งหมดใช่หรือไม่? การลบไม่สามารถเรียกคืนได้')) {
+      setTravelRequests([]);
+      localStorage.removeItem('sdc_history_v2');
+      localStorage.removeItem('sdc_history');
+      alert('ล้างข้อมูลทั้งหมดเรียบร้อยแล้วครับ');
+    }
   };
 
   const saveToHistory = (data) => {
@@ -362,6 +558,46 @@ function App() {
     }
   };
 
+  const deleteRequest = (id) => {
+    if (window.confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) {
+      setTravelRequests(prev => {
+        const itemToDelete = prev.find(r => String(r.id) === String(id));
+        if (!itemToDelete) return prev;
+        
+        const filtered = prev.filter(r => String(r.id) !== String(id));
+        
+        // Re-index sequences for the same category to keep them continuous
+        const catId = itemToDelete.categoryId;
+        let seq = 1;
+        // Sort by creation date to maintain original order during re-indexing
+        return filtered
+          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+          .map(r => {
+            if (r.categoryId === catId) {
+              return { ...r, sequence: seq++ };
+            }
+            return r;
+          })
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Return to descending order for display
+      });
+      if (String(selectedRequest?.id) === String(id)) setSelectedRequest(null);
+    }
+  };
+
+  const handleStartTour = () => {
+    setTourStep(1);
+    setAssistantMsg('เดี๋ยวผมจะแนะนำการใช้งานให้นะครับ');
+  };
+
+  const submitSurvey = (val) => {
+    setRating(val);
+    setAssistantMsg('ขอบคุณสำหรับคำแนะนำครับ! 🙏');
+    setTimeout(() => {
+      setShowSurvey(false);
+      setAssistantMsg('สวัสดีครับ มีอะไรให้ช่วยไหมครับ?');
+    }, 3000);
+  };
+
   const handleTravelRequestComplete = (data) => {
     try {
       console.log("Completing travel request...", data);
@@ -377,11 +613,11 @@ function App() {
     }
   };
 
-  const handleSaveOnly = async (data) => {
+  const handleSaveOnly = async (data, silent = false) => {
     const isEdit = !!data.id;
     const saved = saveToHistory(data);
 
-    if (saved) {
+    if (saved && !silent) {
       // 1. Try to save to a known file handle if it exists
       const handle = fileHandlesRef.current.get(saved.id);
       if (handle) {
@@ -445,10 +681,12 @@ function App() {
 
   const handlePrint = () => {
     document.body.classList.add('printing-mode');
-    window.print();
     setTimeout(() => {
-      document.body.classList.remove('printing-mode');
-    }, 500);
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('printing-mode');
+      }, 500);
+    }, 100);
   };
 
   const handleAnswer = (qId, value) => {
@@ -459,12 +697,41 @@ function App() {
     if (step < category.questions.length - 1) {
       setStep(step + 1);
     } else {
+      if (!selectedRequest) {
+        // Create NEW record
+        const newReq = {
+          id: Date.now().toString(),
+          sequence: getNextSequence(selectedCategory),
+          categoryId: selectedCategory,
+          checklistAnswers: answers,
+          createdAt: new Date().toISOString(),
+          status: 'draft',
+          checkedDocs: []
+        };
+        setTravelRequests(prev => [newReq, ...prev]);
+        setSelectedRequest(newReq);
+      } else {
+        // UPDATE existing record
+        setTravelRequests(prev => {
+          const updatedList = prev.map(r =>
+            String(r.id) === String(selectedRequest.id)
+              ? { ...r, checklistAnswers: answers, updatedAt: new Date().toISOString() }
+              : r
+          );
+          // Sync selectedRequest state
+          const updatedObj = updatedList.find(r => String(r.id) === String(selectedRequest.id));
+          if (updatedObj) setSelectedRequest(updatedObj);
+          return updatedList;
+        });
+      }
       setShowResult(true);
+      window.scrollTo(0, 0);
     }
   };
 
   const reset = () => {
     setSelectedCategory(null);
+    setSelectedRequest(null);
     setActiveView('menu');
     setAnswers({});
     setStep(0);
@@ -544,14 +811,59 @@ function App() {
         </div>
         <div className="header-actions">
           <div className="flex flex-col items-end gap-2">
-            <div className="badge">Smart Disbursement Checklist</div>
-            <button
-              className="btn-manual-pill"
-              onClick={() => setActiveView('user-manual')}
-            >
-              <FileText size={16} />
-              <span>คู่มือการใช้งานระบบ</span>
-            </button>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Smart Disbursement Checklist</div>
+            
+            <div className="survey-trigger-container">
+              {!showSurveyPanel ? (
+                <button 
+                  className="btn-survey-trigger"
+                  onClick={() => setShowSurveyPanel(true)}
+                >
+                  <Star size={14} /> ประเมินความพึงพอใจ
+                </button>
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className="header-survey-panel glass-card"
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-sky-300">ความพึงพอใจการใช้งาน</span>
+                    <button className="btn-close-survey" onClick={() => setShowSurveyPanel(false)}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex gap-1 justify-center mb-3">
+                    {[1, 2, 3, 4, 5].map(v => (
+                      <button
+                        key={v}
+                        className={`star-btn-small ${surveyRating >= v ? 'active' : ''}`}
+                        onClick={() => setSurveyRating(v)}
+                        onMouseEnter={() => setSurveyRating(v)}
+                      >
+                        <Star size={18} fill={surveyRating >= v ? "currentColor" : "none"} />
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea 
+                    className="survey-textarea"
+                    placeholder="แสดงความคิดเห็นปรับปรุงแก้ไขระบบให้คำแนะนำ..."
+                    rows="2"
+                    value={surveyComment}
+                    onChange={(e) => setSurveyComment(e.target.value)}
+                  />
+
+                  <button 
+                    className="btn-submit-survey"
+                    onClick={handleSubmitHeaderSurvey}
+                  >
+                    ส่งความเห็น
+                  </button>
+                </motion.div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -565,6 +877,7 @@ function App() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="dashboard-container"
+                  id="tour-step-1"
                 >
                   <div className="main-cards-grid">
                     {DISBURSEMENT_CATEGORIES.map(cat => {
@@ -593,26 +906,137 @@ function App() {
                       </div>
                       <ChevronRight className="card-arrow" />
                     </button>
-                  </div>
 
-                  <div className="quick-actions mini" style={{ justifyContent: 'center', marginTop: '3rem', gap: '1.5rem' }}>
-                    <button className="btn-premium" onClick={() => { setSelectedRequest(null); setActiveView('travel-request'); }} style={{ padding: '1rem 2.5rem', fontSize: '1.1rem' }}>
-                      <PlusCircle size={24} />
-                      <span>สร้างแบบฟอร์มใหม่</span>
-                    </button>
-                    <button className="btn-premium-success" onClick={() => setActiveView('history')} style={{ padding: '1rem 2.5rem', fontSize: '1.1rem' }}>
-                      <List size={24} />
-                      <span>ดูประวัติการเบิกจ่าย ({travelRequests.length})</span>
+                    <button className="main-card history-all" onClick={() => setActiveView('history')} style={{ background: 'rgba(99, 102, 241, 0.1)', borderColor: 'rgba(99, 102, 241, 0.2)' }}>
+                      <div className="card-icon" style={{ color: '#818cf8' }}>
+                        <List size={48} />
+                      </div>
+                      <div className="card-content">
+                        <h3 style={{ color: '#818cf8' }}>ประวัติการเบิกจ่ายทั้งหมด</h3>
+                        <p>ดูรายการคำขอและใบเบิกทั้งหมดที่เคยบันทึกไว้</p>
+                      </div>
+                      <ChevronRight className="card-arrow" style={{ color: '#818cf8' }} />
                     </button>
                   </div>
                 </motion.div>
               );
 
+            case 'category-view':
+              const categoryRequests = travelRequests.filter(r => r.categoryId === selectedCategory);
+              const catInfo = DISBURSEMENT_CATEGORIES.find(c => c.id === selectedCategory);
+              const CatIcon = catInfo ? (IconMap[catInfo.icon] || FileText) : FileText;
+
+              return (
+                <div className="history-view">
+                  <div className="history-header">
+                    <div className="flex flex-col gap-4 mb-6">
+                      <div className="flex items-center gap-2 no-print">
+                        <button className="btn-secondary-small" onClick={handleBack}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                        <button className="btn-secondary-small" onClick={reset}><Home size={16} /> หน้าหลัก</button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <h2 className="m-0 flex items-center gap-3">
+                          <CatIcon size={28} className="text-accent" />
+                          {catInfo?.title}
+                        </h2>
+                        <div className="flex gap-3">
+                          <button className="btn-secondary-small whitespace-nowrap" onClick={handleImportFiles} title="นำเข้าไฟล์ .json">
+                            <FileText size={18} className="text-blue-400" /> <span className="btn-text">นำเข้าไฟล์</span>
+                          </button>
+                          <button className="btn-secondary-small whitespace-nowrap" onClick={clearAllHistory} title="ล้างประวัติทั้งหมด">
+                            <Trash2 size={18} className="text-red-400" /> <span className="btn-text">ล้างข้อมูลทั้งหมด</span>
+                          </button>
+                          <button className="btn-premium" onClick={startNewRecord}>
+                            <Plus size={20} />
+                            <span>สร้างรายการใหม่ (ลำดับที่ {getNextSequence(selectedCategory)})</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="search-container" style={{ maxWidth: 'none' }}>
+                      <Search className="search-icon-inside" size={20} />
+                      <input
+                        type="text"
+                        placeholder="ค้นหาในหมวดนี้..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="search-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="history-grid mt-6">
+                    {categoryRequests
+                      .filter(req =>
+                        (req.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        (req.destination || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        (req.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
+                      )
+                      .length > 0 ? (
+                      categoryRequests
+                        .filter(req =>
+                          (req.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (req.destination || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (req.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                        .sort((a, b) => (b.sequence || 0) - (a.sequence || 0)).map(req => (
+                          <div key={req.id} className="history-card-v2 glass-card">
+                            <div className="card-header">
+                              <div className="flex flex-col">
+                                <span className="card-date">ลำดับที่ {req.sequence || '-'} • {new Date(req.createdAt).toLocaleDateString('th-TH')}</span>
+                                <h4 className="card-title">{req.name || 'รายการใหม่ (ยังไม่ระบุชื่อ)'}</h4>
+                              </div>
+                              <button className="btn-history-pill" onClick={() => {
+                                setSelectedCategory(req.categoryId);
+                                setSelectedRequest(req);
+                                setAnswers(req.checklistAnswers || {});
+                                setShowResult(true);
+                                setActiveView('checklist');
+                              }}>
+                                <List size={14} /> รายการเอกสาร
+                              </button>
+                            </div>
+                            <div className="card-body">
+                              <div className="meta-item"><MapPin size={12} /> {req.destination || 'ไม่ได้ระบุสถานที่'}</div>
+                              <div className="meta-item"><FileText size={12} /> {req.orderNumber || 'ไม่มีเลขที่คำสั่ง'}</div>
+                            </div>
+                            <div className="card-actions">
+                              <button className="btn-history-pill reimburse" onClick={() => handleStartReimbursement(req)}>
+                                <FileText size={14} /> เบิกจ่าย
+                              </button>
+                              <button className="btn-history-pill edit" onClick={() => {
+                                setSelectedRequest(req);
+                                setActiveView('travel-request');
+                              }}>
+                                <Edit size={14} /> แก้ไขข้อมูล
+                              </button>
+                              <button className="btn-history-pill print" onClick={() => handleStartPrint(req)}>
+                                <Printer size={14} /> พิมพ์
+                              </button>
+                              <button className="btn-history-pill delete-v2" onClick={(e) => { e.stopPropagation(); deleteRequest(req.id); }} title="ลบรายการ">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="col-span-full text-center py-20 opacity-50">
+                        <p>ยังไม่มีรายการในหมวดนี้ คลิกปุ่มด้านบนเพื่อเริ่มสร้างรายการใหม่</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+
             case 'travel-request':
               return (
                 <div className="workflow-container">
-                  <div className="flex items-center gap-4 mb-8">
-                    <button className="back-btn-circle" onClick={reset}><ArrowLeft size={22} /></button>
+                  <div className="flex flex-col gap-4 mb-8">
+                    <div className="flex items-center gap-2 no-print">
+                      <button className="btn-secondary-small" onClick={handleBack}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                      <button className="btn-secondary-small" onClick={reset}><Home size={16} /> หน้าหลัก</button>
+                    </div>
                     <h2 className="m-0 flex items-center gap-3">
                       <PlusCircle size={28} className="text-accent" />
                       สร้างแบบฟอร์มขออนุมัติเดินทาง
@@ -628,29 +1052,32 @@ function App() {
 
             case 'history':
               return (
-                <div className="history-view">
+                <div className="history-view" id="tour-step-5">
                   <div className="history-header">
-                    <div className="flex items-center justify-between mb-8">
-                      {/* Top Row Left: Back & Title */}
-                      <div className="flex items-center gap-4">
-                        <button className="back-btn-circle" onClick={reset}><ArrowLeft size={22} /></button>
+                    <div className="flex flex-col gap-4 mb-8">
+                      <div className="flex items-center gap-2 no-print">
+                        <button className="btn-secondary-small" onClick={handleBack}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                        <button className="btn-secondary-small" onClick={reset}><Home size={16} /> หน้าหลัก</button>
+                      </div>
+                      <div className="flex items-center justify-between">
                         <h2 className="m-0 flex items-center gap-3">
                           <List size={28} className="text-accent" />
-                          ประวัติการเบิกจ่าย
+                          ประวัติการเบิกจ่ายทั้งหมด
                         </h2>
-                      </div>
-
-                      {/* Top Row Right: Actions */}
-                      <div className="flex gap-3 flex-nowrap">
-                        <button className="btn-secondary-small whitespace-nowrap" onClick={handleImportFiles} title="นำเข้าไฟล์ .json">
-                          <FileText size={18} className="text-blue-400" /> <span className="btn-text">นำเข้าไฟล์</span>
-                        </button>
-                        <button className="btn-secondary-small whitespace-nowrap" onClick={handleImportFolder} title="นำเข้าโฟลเดอร์">
-                          <Folder size={18} className="text-indigo-400" /> <span className="btn-text">นำเข้าโฟลเดอร์</span>
-                        </button>
-                        <button className="btn-premium whitespace-nowrap" style={{ padding: '0.6rem 1.25rem', minWidth: 'auto' }} onClick={exportHistory} title="สำรองข้อมูลประวัติลง PC">
-                          <Database size={18} /> <span className="btn-text">สำรองข้อมูลประวัติลง PC</span>
-                        </button>
+                        <div className="flex gap-3 flex-nowrap">
+                          <button className="btn-secondary-small whitespace-nowrap" onClick={handleImportFiles} title="นำเข้าไฟล์ .json">
+                            <FileText size={18} className="text-blue-400" /> <span className="btn-text">นำเข้าไฟล์</span>
+                          </button>
+                          <button className="btn-secondary-small whitespace-nowrap" onClick={handleImportFolder} title="นำเข้าโฟลเดอร์">
+                            <Folder size={18} className="text-indigo-400" /> <span className="btn-text">นำเข้าโฟลเดอร์</span>
+                          </button>
+                          <button className="btn-secondary-small whitespace-nowrap" onClick={clearAllHistory} title="ล้างประวัติทั้งหมด">
+                            <Trash2 size={18} className="text-red-400" /> <span className="btn-text">ล้างประวัติ</span>
+                          </button>
+                          <button className="btn-premium whitespace-nowrap" style={{ padding: '0.6rem 1.25rem', minWidth: 'auto' }} onClick={exportHistory} title="สำรองข้อมูลประวัติลง PC">
+                            <Database size={18} /> <span className="btn-text">สำรองข้อมูลประวัติลง PC</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -689,9 +1116,6 @@ function App() {
                             <div className="meta-item"><FileText size={12} /> {req.orderNumber || 'ไม่มีเลขที่คำสั่ง'}</div>
                           </div>
                           <div className="card-actions">
-                            <button className="btn-history-pill print" onClick={() => handleStartPrint(req)}>
-                              <Printer size={14} /> พิมพ์
-                            </button>
                             <button className="btn-history-pill reimburse" onClick={() => handleStartReimbursement(req)}>
                               <FileText size={14} /> เบิกจ่าย
                             </button>
@@ -700,6 +1124,12 @@ function App() {
                               setActiveView('travel-request');
                             }}>
                               <Edit size={14} /> แก้ไข
+                            </button>
+                            <button className="btn-history-pill print" onClick={() => handleStartPrint(req)}>
+                              <Printer size={14} /> พิมพ์
+                            </button>
+                            <button className="btn-history-pill delete-v2" onClick={(e) => { e.stopPropagation(); deleteRequest(req.id); }} title="ลบรายการ">
+                              <Trash2 size={14} />
                             </button>
                             <button className="btn-history-pill save" onClick={() => exportSingleRequest(req)} title="บันทึกลงเครื่อง">
                               <Download size={14} />
@@ -720,8 +1150,11 @@ function App() {
             case 'reimbursement':
               return (
                 <div className="workflow-container">
-                  <div className="flex items-center gap-4 mb-8">
-                    <button className="back-btn-circle" onClick={() => setActiveView('history')}><ArrowLeft size={22} /></button>
+                  <div className="flex flex-col gap-4 mb-8">
+                    <div className="flex items-center gap-2 no-print">
+                      <button className="btn-secondary-small" onClick={handleBack}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                      <button className="btn-secondary-small" onClick={reset}><Home size={16} /> หน้าหลัก</button>
+                    </div>
                     <h2 className="m-0 flex items-center gap-3">
                       <FileText size={28} className="text-accent" />
                       เบิกจ่ายเงินค่าใช้จ่ายเดินทาง
@@ -730,7 +1163,7 @@ function App() {
                   <ReimbursementForm
                     request={selectedRequest}
                     onComplete={handleReimbursementComplete}
-                    onCancel={() => setActiveView('history')}
+                    onCancel={() => setActiveView('category-view')}
                   />
                 </div>
               );
@@ -740,12 +1173,14 @@ function App() {
                 <div className="print-preview-mode w-full max-w-none">
                   <div className="workflow-container mb-6 no-print">
                     <div className="white-bg-actions">
-                      <button className="btn-white-premium" onClick={reset}>
-                        <Home size={20} className="text-blue-500" /> หน้าหลัก
-                      </button>
-                      <button className="btn-white-premium" onClick={() => setActiveView('history')}>
-                        <List size={20} className="text-emerald-500" /> กลับรายการบันทึก
-                      </button>
+                      <div className="flex gap-2">
+                        <button className="btn-white-premium" onClick={handleBack} title="ย้อนกลับ">
+                          <ArrowLeft size={18} /> ย้อนกลับ
+                        </button>
+                        <button className="btn-white-premium" onClick={reset} title="หน้าหลัก">
+                          <Home size={18} /> หน้าหลัก
+                        </button>
+                      </div>
 
                       <div className="flex gap-3">
                         <button className="btn-white-premium" onClick={() => setActiveView('travel-request')}>
@@ -762,15 +1197,23 @@ function App() {
               );
 
             case 'checklist':
+              if (!category || !category.questions) return (
+                <div className="workflow-container text-center py-20">
+                  <p>ไม่พบข้อมูลหมวดหมู่ที่เลือก กรุณากลับไปเลือกหมวดหมู่ใหม่อีกครั้ง</p>
+                  <button className="btn-primary mt-4" onClick={reset}>กลับหน้าหลัก</button>
+                </div>
+              );
               return (
                 <div className="workflow-container">
-                  <div className="flex justify-between items-center mb-8">
-                    <button className="back-btn-circle" onClick={reset}><ArrowLeft size={22} /></button>
+                  <div className="flex flex-col gap-4 mb-8">
+                    <div className="flex items-center gap-2 no-print">
+                      <button className="btn-secondary-small" onClick={handleBack}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                      <button className="btn-secondary-small" onClick={reset}><Home size={16} /> หน้าหลัก</button>
+                    </div>
                     <h2 className="m-0 flex items-center gap-3">
                       <CheckCircle size={28} className="text-accent" />
                       ตรวจสอบรายการเอกสาร
                     </h2>
-                    <div style={{ width: '46px' }}></div> {/* Spacer to keep title centered */}
                   </div>
 
                   <AnimatePresence mode="wait">
@@ -781,19 +1224,20 @@ function App() {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                         className="glass-card questionnaire"
+                        id="tour-step-2"
                       >
                         <div className="progress">
                           <div
                             className="progress-fill"
-                            style={{ width: `${((step + 1) / category.questions.length) * 100}%` }}
+                            style={{ width: `${((step + 1) / (category.questions?.length || 1)) * 100}%` }}
                           />
                         </div>
 
-                        <span className="step-count">คำถามที่ {step + 1} จาก {category.questions.length}</span>
-                        <h2>{category.questions[step].text}</h2>
+                        <span className="step-count">คำถามที่ {step + 1} จาก {category.questions?.length || 0}</span>
+                        <h2>{category.questions?.[step]?.text}</h2>
 
                         <div className="options-list">
-                          {category.questions[step].options.map((opt) => (
+                          {category.questions?.[step]?.options?.map((opt) => (
                             <button
                               key={opt.value}
                               className={`option-item ${answers[category.questions[step].id] === opt.value ? 'active' : ''}`}
@@ -807,10 +1251,10 @@ function App() {
 
                         <button
                           className="btn-primary full-width"
-                          disabled={!answers[category.questions[step].id]}
+                          disabled={!category.questions?.[step] || !answers[category.questions[step].id]}
                           onClick={nextStep}
                         >
-                          {step === category.questions.length - 1 ? 'ดูรายการเอกสาร' : 'ถัดไป'}
+                          {step === (category.questions?.length || 0) - 1 ? 'ดูรายการเอกสาร' : 'ถัดไป'}
                         </button>
                       </motion.div>
                     ) : (
@@ -819,6 +1263,7 @@ function App() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         className="glass-card result-card"
+                        id="tour-step-3"
                       >
                         <div className="result-header">
                           <div className="success-icon">
@@ -836,50 +1281,79 @@ function App() {
                           {checklist.forms.length > 0 && (
                             <div className="checklist-group">
                               <h3 className="group-title"><FileText size={18} /> แบบฟอร์มที่ต้องกรอก (Forms)</h3>
-                              {checklist.forms.map((item, index) => (
-                                <motion.div
-                                  key={`form-${index}`}
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  className="checklist-item"
-                                >
-                                  <div className="print-checkbox"></div>
-                                  <span>{item}</span>
-                                </motion.div>
-                              ))}
+                              {checklist.forms.map((item, index) => {
+                                const isChecked = selectedRequest?.checkedDocs?.includes(item);
+                                return (
+                                  <motion.div
+                                    key={`form-${index}`}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="checklist-item"
+                                    onClick={() => handleCheckDoc(selectedRequest?.id, item, !isChecked)}
+                                    style={{ cursor: 'pointer' }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="no-print"
+                                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                      checked={isChecked || false}
+                                      readOnly
+                                    />
+                                    <div className={`print-checkbox print-only ${isChecked ? 'checked' : ''}`} style={{ alignItems: 'center', justifyContent: 'center', fontSize: '14pt', fontWeight: 'bold' }}>
+                                      {isChecked && '✓'}
+                                    </div>
+                                    <span className="flex-grow">{item}</span>
+                                  </motion.div>
+                                );
+                              })}
                             </div>
                           )}
 
                           {checklist.evidence.length > 0 && (
                             <div className="checklist-group mt-4">
                               <h3 className="group-title"><ShieldCheck size={18} /> เอกสารประกอบ / หลักฐาน (Evidence)</h3>
-                              {checklist.evidence.map((item, index) => (
-                                <motion.div
-                                  key={`doc-${index}`}
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  className="checklist-item"
-                                >
-                                  <div className="print-checkbox"></div>
-                                  <span>{item}</span>
-                                </motion.div>
-                              ))}
+                              {checklist.evidence.map((item, index) => {
+                                const isChecked = selectedRequest?.checkedDocs?.includes(item);
+                                return (
+                                  <motion.div
+                                    key={`doc-${index}`}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="checklist-item"
+                                    onClick={() => handleCheckDoc(selectedRequest?.id, item, !isChecked)}
+                                    style={{ cursor: 'pointer' }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="no-print"
+                                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                      checked={isChecked || false}
+                                      readOnly
+                                    />
+                                    <div className={`print-checkbox print-only ${isChecked ? 'checked' : ''}`} style={{ alignItems: 'center', justifyContent: 'center', fontSize: '14pt', fontWeight: 'bold' }}>
+                                      {isChecked && '✓'}
+                                    </div>
+                                    <span className="flex-grow">{item}</span>
+                                  </motion.div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
 
-                        <div className="result-actions" style={{ flexDirection: 'column', gap: '1rem' }}>
-                          <button className="btn-primary-large pulse-effect" onClick={() => setActiveView('travel-request')} style={{ width: '100%' }}>
-                            <PlusCircle size={20} /> สร้างแบบฟอร์มขออนุมัติเดินทาง
+                        <div className="result-actions no-print" style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                          <button className="btn-primary-large" onClick={handlePrint} style={{ borderRadius: '1rem' }}>
+                            <Printer size={20} /> พิมพ์รายการตรวจสอบ
                           </button>
-                          <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
-                            <button className="btn-outline flex items-center justify-center gap-2" style={{ flex: 1, borderRadius: '2rem' }} onClick={reset}>
-                              <ArrowLeft size={18} /> กลับสู่หน้าหลัก
-                            </button>
-                            <button className="btn-outline flex items-center justify-center gap-2" style={{ flex: 1, borderRadius: '2rem' }} onClick={() => window.print()}>
-                              <Printer size={18} /> พิมพ์รายการเอกสาร
-                            </button>
-                          </div>
+                          <button className="btn-primary-large" onClick={() => setActiveView('travel-request')} style={{ borderRadius: '1rem', background: 'linear-gradient(135deg, #0ea5e9, #2563eb)' }}>
+                            <FileText size={20} /> สร้างแบบ 8708 / บก.111
+                          </button>
+                          <button className="btn-outline" onClick={handleResetChecklist} style={{ flex: '1 1 45%', borderRadius: '1rem', background: 'rgba(255, 255, 255, 0.05)' }}>
+                            <RefreshCcw size={18} className="text-amber-400" /> ล้างเครื่องหมายถูก
+                          </button>
+                          <button className="btn-outline" onClick={handleRestartSurvey} style={{ flex: '1 1 45%', borderRadius: '1rem', background: 'rgba(255, 255, 255, 0.05)' }}>
+                            <RefreshCcw size={18} className="text-blue-400" /> {selectedRequest ? 'แก้ไขคำตอบ' : 'เริ่มทำคำถามใหม่'}
+                          </button>
                         </div>
                       </motion.div>
                     )}
@@ -890,13 +1364,15 @@ function App() {
             case 'knowledge-center':
               return (
                 <div className="workflow-container">
-                  <div className="flex justify-between items-center mb-32">
-                    <button className="back-btn-circle" onClick={reset}><ArrowLeft size={22} /></button>
+                  <div className="flex flex-col gap-4 mb-8">
+                    <div className="flex items-center gap-2 no-print">
+                      <button className="btn-secondary-small" onClick={handleBack}><ArrowLeft size={16} /> ย้อนกลับ</button>
+                      <button className="btn-secondary-small" onClick={reset}><Home size={16} /> หน้าหลัก</button>
+                    </div>
                     <h2 className="m-0 flex items-center gap-3">
                       <ShieldCheck size={28} className="text-accent" />
                       สาระน่ารู้และเอกสารดาวน์โหลด
                     </h2>
-                    <div style={{ width: '46px' }}></div> {/* Spacer */}
                   </div>
 
                   <div className="knowledge-container">
@@ -926,7 +1402,7 @@ function App() {
                             <h3 className="mb-4 text-accent" style={{ fontSize: '1.1rem' }}>{group.category}</h3>
                             <div className="download-list">
                               {group.files.map((file, fidx) => (
-                                <a key={fidx} href={file.url} className="download-item">
+                                <a key={fidx} href={file.url} className="download-item" target="_blank" rel="noopener noreferrer">
                                   <div className="doc-info">
                                     <FileText className="download-icon" size={20} />
                                     <span>{file.name}</span>
@@ -989,7 +1465,7 @@ function App() {
                         </div>
                       </div>
                     </section>
-                    
+
                     {/* Bottom Action Section */}
                     <div className="mt-12 text-center no-print pb-10">
                       <button className="btn-outline flex items-center justify-center gap-2 mx-auto" onClick={reset} style={{ padding: '0.8rem 2.5rem', borderRadius: '2rem' }}>
@@ -1095,11 +1571,87 @@ function App() {
                 </div>
               );
 
+            case 'survey':
+              return null; // Removed in favor of Assistant-based survey
+
             default:
               return <div>View not found</div>;
           }
         })()}
       </main>
+
+      <div className="assistant-fab-container no-print">
+        {activeView === 'menu' && (
+          <button
+            className="btn-manual-fixed"
+            onClick={() => setActiveView('user-manual')}
+          >
+            <Book size={20} />
+            <span>คู่มือระบบ</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tour Overlay */}
+      <AnimatePresence>
+        {tourStep > 0 && (
+          <div className="tour-overlay">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className={`tour-bubble step-${tourStep}`}
+            >
+              <div className="tour-content glass-card">
+                <div className="tour-step-badge">{tourStep}/5</div>
+                <h3 className="accent-color mb-2">
+                  {tourStep === 1 && "หมวดการเดินทาง"}
+                  {tourStep === 2 && "ตรวจสอบเบื้องต้น"}
+                  {tourStep === 3 && "เอกสารที่ต้องเตรียม"}
+                  {tourStep === 4 && "กรอกข้อมูลแบบฟอร์ม"}
+                  {tourStep === 5 && "ประวัติและการจัดการ"}
+                </h3>
+                <div className="tour-description mb-6">
+                  {tourStep === 1 && <p>เลือกประเภทการเดินทางที่คุณต้องการเบิกจ่าย ระบบจะคัดกรองระเบียบที่เกี่ยวข้องให้โดยเฉพาะ</p>}
+                  {tourStep === 2 && <p>ตอบคำถามสั้นๆ เพื่อให้ระบบคำนวณสิทธิการเบิกจ่ายตามระเบียบล่าสุดครับ</p>}
+                  {tourStep === 3 && <p>นี่คือรายการเอกสารที่คุณต้องเตรียมเพื่อยื่นเบิกจ่าย ตรวจสอบให้ครบถ้วนก่อนเริ่มกรอกข้อมูลนะครับ</p>}
+                  {tourStep === 4 && <p>กรอกข้อมูลรายละเอียดการเดินทางให้ครบถ้วน ระบบจะช่วยคำนวณเบี้ยเลี้ยงและค่าใช้จ่ายอัตโนมัติ</p>}
+                  {tourStep === 5 && <p>คุณสามารถดูประวัติ แก้ไข หรือสั่งพิมพ์เอกสารย้อนหลังได้จากหน้านี้ทั้งหมดครับ</p>}
+                </div>
+                <div className="flex justify-between gap-4">
+                  <button className="btn-outline-small" onClick={() => setTourStep(0)}>ยกเลิก</button>
+                  <button className="btn-primary-small flex-1" onClick={() => {
+                    if (tourStep < 5) {
+                      // Automatically move to relevant view for demonstration if possible
+                      if (tourStep === 1) {
+                        // For demo, pick first category
+                        const firstCat = DISBURSEMENT_CATEGORIES[0]?.id;
+                        if (firstCat) {
+                          setSelectedCategory(firstCat);
+                          setActiveView('checklist');
+                        }
+                      }
+                      if (tourStep === 2) {
+                        setShowResult(true);
+                      }
+                      if (tourStep === 3) setActiveView('travel-request');
+                      if (tourStep === 4) setActiveView('history');
+                      setTourStep(tourStep + 1);
+                    } else {
+                      setTourStep(0);
+                      setActiveView('category-view');
+                      setAssistantMsg('ยินดีต้อนรับสู่ระบบ SDC System ครับ!');
+                    }
+                  }}>
+                    {tourStep === 5 ? "เริ่มต้นใช้งาน" : "ถัดไป"}
+                  </button>
+                </div>
+              </div>
+              <div className="tour-pointer"></div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <footer className="app-footer">
         <p>© 2026 SDC System - ธนารักษ์พื้นที่หนองบัวลำภู</p>
