@@ -10,6 +10,7 @@ export const DISBURSEMENT_CATEGORIES = [
         text: 'เดินทางโดยพาหนะประเภทใด?',
         options: [
           { label: 'รถยนต์ส่วนตัว', value: 'private-car' },
+          { label: 'รถยนต์ราชการ', value: 'official-car' },
           { label: 'เครื่องบิน', value: 'plane' },
           { label: 'รถโดยสารประจำทาง/รถไฟ', value: 'public' }
         ]
@@ -29,15 +30,25 @@ export const DISBURSEMENT_CATEGORIES = [
         condition: { id: 'travel-temp' }, 
         require: [
           { text: 'แบบขออนุญาตไปราชการ / คำสั่งให้เดินทางไปราชการ', type: 'form' },
-          { text: 'ใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ (แบบ 8708)', type: 'form' },
-          { text: 'ใบตราคุมงบประมาณ (ใบ GF)', type: 'evidence' }
+          { text: 'ใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ (แบบ 8708) / ใบรับรองแทนใบเสร็จรับเงิน (แบบ บก.111)', type: 'form' },
+          { text: 'ใบตราคุมงบประมาณ (ใบ GF)', type: 'evidence' },
+          { text: 'กำหนดการ / โครงการ / หนังสือเชิญประชุม', type: 'evidence' },
+          { text: 'รายงานผลการเดินทางไปราชการ', type: 'evidence' }
         ] 
       },
       { 
         condition: { transport: 'private-car' }, 
         require: [
           { text: 'แบบขออนุญาตใช้ยานพาหนะส่วนตัวเดินทางไปราชการ (แบบ 10)', type: 'form' },
-          { text: 'สำเนาคู่มือจดทะเบียนรถ (เล่มทะเบียน)', type: 'evidence' }
+          { text: 'สำเนาคู่มือจดทะเบียนรถ (เล่มทะเบียน)', type: 'evidence' },
+          { text: 'ใบเสร็จค่าทางด่วน / ค่ามอเตอร์เวย์ / ค่าจอดรถ (ถ้ามี)', type: 'evidence' }
+        ] 
+      },
+      { 
+        condition: { transport: 'official-car' }, 
+        require: [
+          { text: 'ใบอนุญาตใช้รถยนต์ส่วนกลาง', type: 'form' },
+          { text: 'ใบเสร็จค่าน้ำมันเชื้อเพลิง / ค่าทางด่วน (ถ้ามี)', type: 'evidence' }
         ] 
       },
       { 
@@ -50,7 +61,7 @@ export const DISBURSEMENT_CATEGORIES = [
       { 
         condition: { transport: 'public' }, 
         require: [
-          { text: 'ใบรับรองแทนใบเสร็จรับเงิน (แบบ บก.111) พร้อมระบุรายละเอียดเส้นทางและจำนวนเงิน', type: 'form' }
+          { text: 'ตั๋วโดยสาร / ใบเสร็จรับเงิน (ถ้ามี)', type: 'evidence' }
         ] 
       },
       { 
@@ -81,7 +92,8 @@ export const DISBURSEMENT_CATEGORIES = [
         condition: { id: 'travel-perm' }, 
         require: [
           { text: 'คำสั่งย้าย / คำสั่งให้ไปปฏิบัติราชการประจำ', type: 'evidence' },
-          { text: 'ใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ (แบบ 8708)', type: 'form' },
+          { text: 'หนังสือส่งตัว / ใบรายงานตัวเข้าปฏิบัติงาน ณ ที่ตั้งใหม่', type: 'evidence' },
+          { text: 'ใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ (แบบ 8708) / ใบรับรองแทนใบเสร็จรับเงิน (แบบ บก.111)', type: 'form' },
           { text: 'ใบตราคุมงบประมาณ (ใบ GF)', type: 'evidence' }
         ] 
       },
@@ -119,7 +131,8 @@ export const DISBURSEMENT_CATEGORIES = [
         condition: { id: 'return-home' }, 
         require: [
           { text: 'คำสั่งให้ออกจากราชการ / ประกาศเกษียณอายุราชการ', type: 'evidence' },
-          { text: 'ใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ (แบบ 8708)', type: 'form' },
+          { text: 'สำเนาทะเบียนบ้าน (เพื่อยืนยันภูมิลำเนาเดิม)', type: 'evidence' },
+          { text: 'ใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ (แบบ 8708) / ใบรับรองแทนใบเสร็จรับเงิน (แบบ บก.111)', type: 'form' },
           { text: 'ใบตราคุมงบประมาณ (ใบ GF)', type: 'evidence' }
         ] 
       },
