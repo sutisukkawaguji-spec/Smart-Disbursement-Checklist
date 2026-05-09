@@ -49,10 +49,13 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
     name: '',
     position: '',
     department: '',
+    province: 'บึงกาฬ',
     orderNumber: '',
     orderDate: '',
     purpose: '',
     destination: '',
+    eventStartDate: '',
+    eventEndDate: '',
     approverName: '',
     approverPosition: '',
     isPaymentAuthorized: true,
@@ -66,6 +69,10 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
     allowanceDays: 0,
     accommodationDays: 0,
     accommodationRate: 0,
+    accommodationType: 'เหมาจ่าย',
+    isOvernight: false,
+    mealCount: 0,
+    itineraryNote: '',
     travelType: 'individual',
     tripType: 'round-trip-auto',
     team: [{ name: '', position: '', allowanceDays: 0, accommodationDays: 0, transport: '' }],
@@ -272,7 +279,7 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
     updateLeg(dayId, legId, 'distance', '120'); // Mock distance 120km
   };
 
-  const calculateAllowanceDaysAuto = (startStr, startTime, endStr, endTime, accDays) => {
+  const calculateAllowanceDaysAuto = (startStr, startTime, endStr, endTime, isOvernight) => {
     if (!startStr || !endStr) return 0;
     const start = new Date(`${startStr}T${startTime || '00:00'}`);
     const end = new Date(`${endStr}T${endTime || '00:00'}`);
@@ -280,8 +287,9 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
     if (diffMs <= 0) return 0;
 
     const totalHours = diffMs / (1000 * 60 * 60);
+    if (isNaN(totalHours)) return 0;
 
-    if (Number(accDays) > 0) {
+    if (isOvernight) {
       // Overnight rule: use 24-hour cycle
       const fullDays = Math.floor(totalHours / 24);
       const remainingHours = totalHours % 24;
@@ -292,7 +300,7 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
 
       return fullDays + extra;
     } else {
-      // No stay rule: use 12h/6h rule on total hours
+      // No stay rule (Day Trip): use 12h/6h rule on total hours
       if (totalHours > 12) return 1;
       if (totalHours > 6) return 0.5;
       return 0;
@@ -300,18 +308,48 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
   };
 
   // Auto-update allowance days when timing or accommodation changes
-  useMemo(() => {
+  useEffect(() => {
     const autoDays = calculateAllowanceDaysAuto(
       formData.departDate,
       formData.departTime,
       formData.returnDate,
       formData.returnTime,
-      formData.accommodationDays
+      formData.isOvernight
     );
     if (autoDays !== Number(formData.allowanceDays)) {
       setFormData(prev => ({ ...prev, allowanceDays: autoDays }));
     }
-  }, [formData.departDate, formData.departTime, formData.returnDate, formData.returnTime, formData.accommodationDays]);
+  }, [formData.departDate, formData.departTime, formData.returnDate, formData.returnTime, formData.isOvernight, formData.allowanceDays]);
+
+  // Sync first day date/time with departDate/departTime
+  useEffect(() => {
+    if (formData.itinerary?.[0]) {
+      const firstDay = formData.itinerary[0];
+      const firstLeg = firstDay.legs?.[0];
+
+      const needsDateSync = formData.departDate && firstDay.date !== formData.departDate;
+      const needsTimeSync = formData.departTime && firstLeg && firstLeg.startTime !== formData.departTime;
+
+      if (needsDateSync || needsTimeSync) {
+        setFormData(prev => ({
+          ...prev,
+          itinerary: prev.itinerary.map((d, i) => {
+            if (i === 0) {
+              const updatedLegs = d.legs.map((l, li) =>
+                li === 0 ? { ...l, startTime: needsTimeSync ? formData.departTime : l.startTime } : l
+              );
+              return {
+                ...d,
+                date: needsDateSync ? formData.departDate : d.date,
+                legs: updatedLegs
+              };
+            }
+            return d;
+          })
+        }));
+      }
+    }
+  }, [formData.departDate, formData.departTime]);
 
   // AUTO-SYNC RETURN LEGS: This effect keeps the return legs in sync with outbound legs automatically.
   useEffect(() => {
@@ -379,6 +417,17 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
       }
     }
   }, [JSON.stringify(formData.itinerary.filter(d => d.direction === 'outbound')), formData.returnTime, formData.returnDate, formData.tripType]);
+
+  // AUTO-SAVE ON CHANGE
+  useEffect(() => {
+    // Only save if it's an existing record or has a name
+    if (formData.id || formData.name) {
+      const timer = setTimeout(() => {
+        if (onSave) onSave(formData, true); // true = silent save
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [formData]);
 
   const generateReturnLegs = () => {
     const itinerary = formData.itinerary || [];
@@ -470,14 +519,29 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (window.confirm("คุณต้องการสร้างไฟล์สำหรับพิมพ์เอกสารใช่หรือไม่?")) {
-      onComplete(formData);
+
+    // Manual validation check for better UX
+    const requiredFields = [
+      { key: 'name', label: 'ชื่อ-นามสกุล' },
+      { key: 'orderNumber', label: 'เลขที่คำสั่ง/บันทึก' },
+      { key: 'orderDate', label: 'วันที่คำสั่ง' },
+      { key: 'destination', label: 'สถานที่ปลายทาง' },
+      { key: 'departDate', label: 'วันที่ออกเดินทาง' },
+      { key: 'returnDate', label: 'วันที่กลับถึง' }
+    ];
+
+    const missing = requiredFields.filter(f => !formData[f.key]);
+    if (missing.length > 0) {
+      alert(`กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน:\n- ${missing.map(m => m.label).join('\n- ')}`);
+      return;
     }
+
+    onComplete(formData);
   };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="disbursement-form-wrapper">
-      <div className="glass-card form-card wide">
+      <div className="glass-card form-card wide" id="tour-step-4">
         <h2 className="form-title">แบบคำขอและใบเบิกค่าใช้จ่ายในการเดินทางไปราชการ</h2>
 
         <form onSubmit={handleSubmit}>
@@ -494,9 +558,15 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
                 <label>ตำแหน่ง</label>
                 <input value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} required />
               </div>
-              <div className="input-group">
-                <label>สังกัด</label>
-                <input value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} required />
+              <div className="input-group-row">
+                <div className="input-group" style={{ flex: 2 }}>
+                  <label>สังกัด</label>
+                  <input value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} required />
+                </div>
+                <div className="input-group" style={{ flex: 1 }}>
+                  <label>จังหวัด</label>
+                  <input value={formData.province} onChange={e => setFormData({ ...formData, province: e.target.value })} placeholder="เช่น บึงกาฬ" />
+                </div>
               </div>
               <div className="input-group-row">
                 <div className="input-group" style={{ flex: 2 }}>
@@ -511,9 +581,24 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
             </div>
 
             <div className="form-section mt-3">
-              <div className="input-group">
-                <label>วัตถุประสงค์การเดินทางไปราชการ</label>
-                <textarea rows="2" value={formData.purpose} onChange={e => setFormData({ ...formData, purpose: e.target.value })} required />
+              <div className="input-group-row">
+                <div className="input-group" style={{ flex: 2 }}>
+                  <label>วัตถุประสงค์การเดินทางไปราชการ</label>
+                  <textarea rows="2" value={formData.purpose} onChange={e => setFormData({ ...formData, purpose: e.target.value })} required />
+                </div>
+                <div className="input-group" style={{ flex: 1 }}>
+                  <label>วันที่จัดงาน/อบรม (ถ้ามี)</label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted w-8">เริ่ม</span>
+                      <input type="date" className="time-select-mini w-full" value={formData.eventStartDate} onChange={e => setFormData({ ...formData, eventStartDate: e.target.value })} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted w-8">ถึง</span>
+                      <input type="date" className="time-select-mini w-full" value={formData.eventEndDate} onChange={e => setFormData({ ...formData, eventEndDate: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="input-group mt-3">
                 <label>สถานที่ปฏิบัติราชการ (ปลายทาง)</label>
@@ -598,22 +683,76 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
               </div>
             </div>
 
-            <div className="allowance-grid mt-4">
+            <div className="form-grid-2 mb-3">
+              <div className="input-group">
+                <label>ลักษณะการเดินทาง (คิดเบี้ยเลี้ยง)</label>
+                <div className="mini-toggle" style={{ marginTop: '5px' }}>
+                  <button type="button" className={!formData.isOvernight ? 'active' : ''} onClick={() => setFormData({ ...formData, isOvernight: false, accommodationDays: 0, accommodationRate: 0 })}>ไป-กลับ (Day Trip)</button>
+                  <button type="button" className={formData.isOvernight ? 'active' : ''} onClick={() => setFormData({ ...formData, isOvernight: true })}>ค้างคืน (Overnight)</button>
+                </div>
+              </div>
               <div className="input-group">
                 <label>ค่าเบี้ยเลี้ยง (บาท/วัน)</label>
                 <input type="number" value={formData.allowanceRate} onChange={e => setFormData({ ...formData, allowanceRate: e.target.value })} />
               </div>
+            </div>
+
+            <div className="allowance-grid mt-4">
               <div className="input-group">
                 <label>จำนวนวัน (เบี้ยเลี้ยง)</label>
                 <input type="number" step="0.5" value={formData.allowanceDays} onChange={e => setFormData({ ...formData, allowanceDays: e.target.value })} />
               </div>
-              <div className="input-group">
-                <label>ค่าที่พัก (บาท/วัน)</label>
-                <input type="number" value={formData.accommodationRate} onChange={e => setFormData({ ...formData, accommodationRate: e.target.value })} />
-              </div>
-              <div className="input-group">
-                <label>จำนวนวัน (ที่พัก)</label>
-                <input type="number" value={formData.accommodationDays} onChange={e => setFormData({ ...formData, accommodationDays: e.target.value })} />
+              {formData.isOvernight && (
+                <>
+                  <div className="input-group">
+                    <label>ประเภทการเบิกที่พัก</label>
+                    <select
+                      value={formData.accommodationType || 'เหมาจ่าย'}
+                      onChange={e => setFormData({ ...formData, accommodationType: e.target.value })}
+                      className="select-input"
+                    >
+                      <option value="-">-</option>
+                      <option value="เหมาจ่าย">แบบเหมาจ่าย (Flat Rate)</option>
+                      <option value="จ่ายจริง">แบบจ่ายจริง (Actual Cost)</option>
+                    </select>
+                    {formData.accommodationType !== '-' && (
+                      <div className="text-[10px] mt-2 p-2 rounded bg-white/5 border border-white/10">
+                        {formData.accommodationType === 'จ่ายจริง' ? (
+                          <div className="flex flex-col gap-1 text-blue-300">
+                            <p>• เบิกได้เท่าที่จ่ายจริง (ไม่เกินเพดานที่กำหนด)</p>
+                            {formData.travelType === 'group' && (
+                              <p className="text-orange-300">• คณะเดินทาง (ระดับ 8 ลงมา) พักรวมกัน 2 คน/ห้อง (อัตราห้องพักคู่)</p>
+                            )}
+                            <p>• หลักฐาน: ต้องแนบใบเสร็จรับเงิน หรือ Folio</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1 text-green-300">
+                            <p>• เบิกตามอัตราคงที่ของระดับตำแหน่ง</p>
+                            <p>• หลักฐาน: ไม่ต้องใช้ใบเสร็จรับเงิน</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="input-group">
+                    <label>ค่าที่พัก (บาท/คืน)</label>
+                    <input type="number" value={formData.accommodationRate} onChange={e => setFormData({ ...formData, accommodationRate: e.target.value })} />
+                  </div>
+                  <div className="input-group">
+                    <label>จำนวนคืน (ที่พัก)</label>
+                    <input type="number" value={formData.accommodationDays} onChange={e => setFormData({ ...formData, accommodationDays: e.target.value })} />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mt-4">
+              <div className="input-group" style={{ background: 'rgba(255,165,0,0.1)', padding: '10pt', borderRadius: '8pt', border: '1px solid rgba(255,165,0,0.2)' }}>
+                <div className="flex-between">
+                  <label style={{ color: '#ffa500', fontWeight: 'bold' }}>มื้ออาหารที่เจ้าภาพจัดเลี้ยง (มื้อ)</label>
+                  <span className="text-[10px] text-orange-300">* หักออกมื้อละ 1/3 ของเบี้ยเลี้ยง ({Math.round(formData.allowanceRate / 3)} บาท)</span>
+                </div>
+                <input type="number" value={formData.mealCount} onChange={e => setFormData({ ...formData, mealCount: e.target.value })} style={{ borderBottomColor: '#ffa500', fontSize: '1.2rem' }} />
               </div>
             </div>
           </div>
@@ -632,39 +771,23 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
                   <table className="group-expense-table modern">
                     <thead>
                       <tr>
-                        <th>ชื่อ-นามสกุล / ตำแหน่ง</th>
-                        <th>เบี้ยเลี้ยง</th>
-                        <th>ที่พัก</th>
-                        <th>พาหนะ</th>
-                        <th></th>
+                        <th style={{ width: '40px' }}>ลำดับ</th>
+                        <th>ชื่อ-นามสกุล</th>
+                        <th>ตำแหน่ง</th>
+                        <th style={{ width: '60px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {formData.team.map((member, idx) => (
                         <tr key={idx}>
-                          <td style={{ minWidth: '220px' }}>
-                            <input placeholder="ชื่อ-นามสกุล" className="mb-1 w-full" value={member.name} onChange={e => updateTeamMember(idx, 'name', e.target.value)} />
-                            <input placeholder="ตำแหน่ง" className="text-muted-small w-full" value={member.position} onChange={e => updateTeamMember(idx, 'position', e.target.value)} />
-                          </td>
-                          <td style={{ width: '100px' }}>
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[10px] text-gray-400">จำนวนวัน</label>
-                              <input type="number" step="0.5" className="w-full" value={member.allowanceDays} onChange={e => updateTeamMember(idx, 'allowanceDays', e.target.value)} />
-                            </div>
-                          </td>
-                          <td style={{ width: '100px' }}>
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[10px] text-gray-400">วันพัก</label>
-                              <input type="number" className="w-full" value={member.accommodationDays} onChange={e => updateTeamMember(idx, 'accommodationDays', e.target.value)} />
-                            </div>
-                          </td>
-                          <td style={{ width: '120px' }}>
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[10px] text-gray-400">ค่าพาหนะ</label>
-                              <input type="number" placeholder="0" className="w-full" value={member.transport} onChange={e => updateTeamMember(idx, 'transport', e.target.value)} />
-                            </div>
+                          <td className="text-center">{idx + 2}</td>
+                          <td>
+                            <input placeholder="ชื่อ-นามสกุล" className="w-full" value={member.name} onChange={e => updateTeamMember(idx, 'name', e.target.value)} />
                           </td>
                           <td>
+                            <input placeholder="ตำแหน่ง" className="w-full" value={member.position} onChange={e => updateTeamMember(idx, 'position', e.target.value)} />
+                          </td>
+                          <td className="text-center">
                             {formData.team.length > 1 && (
                               <button type="button" onClick={() => removeTeamMember(idx)} className="btn-icon-danger-small">
                                 <Trash2 size={14} />
@@ -676,9 +799,11 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
                     </tbody>
                   </table>
                 </div>
-                <button type="button" onClick={addTeamMember} className="btn-add-text mt-3">
-                  <Plus size={16} /> เพิ่มรายชื่อผู้ร่วมเดินทาง
-                </button>
+                <div className="flex gap-4">
+                  <button type="button" onClick={addTeamMember} className="btn-add-text mt-3">
+                    <Plus size={16} /> เพิ่มรายชื่อผู้ร่วมเดินทาง
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -686,11 +811,6 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
           <div className="form-section-highlight section-box dark-bg">
             <div className="flex-between mb-4">
               <h3 className="section-header mb-0">แผนการใช้พาหนะ (บก.111 ค่าพาหนะรับจ้าง)</h3>
-              {formData.tripType === 'round-trip-auto' && (
-                <button type="button" className="btn-auto-reverse" onClick={generateReturnLegs}>
-                  <ArrowRightLeft size={16} /> สร้างขากลับอัตโนมัติ
-                </button>
-              )}
             </div>
             <div className="config-item horizontal">
               <label className="mr-2 text-sm">ประเภททริป:</label>
@@ -731,81 +851,140 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
 
                 <div className="legs-list">
                   {(day.legs || []).map((leg, lIdx) => (
-                    <div key={leg.id} className="leg-item-card">
-                      <div className="leg-top-row">
-                        <select className="transport-select" value={leg.type} onChange={e => updateLeg(day.id, leg.id, 'type', e.target.value)}>
-                          {TRANSPORT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                        </select>
-                        <button type="button" className="btn-icon-danger-small" onClick={() => removeLegFromDay(day.id, leg.id)}><Trash2 size={14} /></button>
+                    <div key={leg.id} className={`leg-item-card-v3 ${leg.isContinuation ? 'continuation' : ''}`}>
+                      <div className="leg-card-header">
+                        <div className="leg-type-badge">
+                          {leg.type === 'private' && <Car size={14} />}
+                          {leg.type === 'van' && <Users size={14} />}
+                          {leg.type === 'bus' && <Truck size={14} />}
+                          {leg.type === 'taxi' && <Car size={14} />}
+                          {leg.type === 'plane' && <Plane size={14} />}
+                          {leg.type === 'train' && <Train size={14} />}
+                          {leg.type === 'ship' && <Ship size={14} />}
+                          <span>{TRANSPORT_TYPES.find(t => t.id === leg.type)?.label || 'พาหนะ'}</span>
+                        </div>
+                        <div className="leg-index">ช่วงที่ {lIdx + 1}</div>
+                        <button type="button" className="btn-remove-leg" onClick={() => removeLegFromDay(day.id, leg.id)}>
+                          <Trash2 size={14} />
+                        </button>
                       </div>
 
-                      <div className="leg-route-row">
-                        <input placeholder="จาก (ต้นทาง)" value={leg.from} onChange={e => updateLeg(day.id, leg.id, 'from', e.target.value)} />
-                        <ArrowRightLeft size={16} className="route-arrow-icon" />
-                        <input placeholder="ถึง (ปลายทาง)" value={leg.to} onChange={e => updateLeg(day.id, leg.id, 'to', e.target.value)} />
-                      </div>
-
-                      <div className="leg-time-row">
-                        <div className="input-group">
-                          <label className="text-xs flex items-center gap-1"><Clock size={12} /> เวลาออก</label>
-                          <TimeSelect24 value={leg.startTime} onChange={val => updateLeg(day.id, leg.id, 'startTime', val)} />
-                        </div>
-                        <div className="input-group">
-                          <label className="text-xs">ระยะเวลาเดินทาง</label>
-                          <div className="flex gap-1">
-                            <input type="number" placeholder="ชม." value={leg.durationHours} onChange={e => updateLeg(day.id, leg.id, 'durationHours', e.target.value)} style={{ width: '60px' }} />
-                            <input type="number" placeholder="นาที" value={leg.durationMinutes} onChange={e => updateLeg(day.id, leg.id, 'durationMinutes', e.target.value)} style={{ width: '60px' }} />
+                      <div className="leg-card-body">
+                        {/* Route Section */}
+                        <div className="leg-route-section">
+                          <div className="route-input-group">
+                            <label><MapPin size={12} /> ต้นทาง</label>
+                            <input 
+                              placeholder="ระบุสถานที่ต้นทาง" 
+                              value={leg.from} 
+                              onChange={e => updateLeg(day.id, leg.id, 'from', e.target.value)} 
+                            />
+                          </div>
+                          <div className="route-connector">
+                            <ArrowRightLeft size={16} />
+                          </div>
+                          <div className="route-input-group">
+                            <label><MapPin size={12} /> ปลายทาง</label>
+                            <input 
+                              placeholder="ระบุสถานที่ปลายทาง" 
+                              value={leg.to} 
+                              onChange={e => updateLeg(day.id, leg.id, 'to', e.target.value)} 
+                            />
                           </div>
                         </div>
-                        <div className="input-group arrival-box">
-                          <label className="text-xs">ถึงปลายทาง</label>
-                          <div className={`arrival-time ${leg.isNextDay ? 'next-day' : ''}`}>
-                            {leg.endTime || '--:--'}
-                            {leg.isNextDay && <span className="day-plus">+1 วัน</span>}
+
+                        {/* Details Grid */}
+                        <div className="leg-details-grid">
+                          <div className="detail-item">
+                            <label>ประเภทพาหนะ</label>
+                            <select className="table-select-v2" value={leg.type} onChange={e => updateLeg(day.id, leg.id, 'type', e.target.value)}>
+                              {TRANSPORT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                            </select>
+                          </div>
+
+                          <div className="detail-item">
+                            <label>เวลาออกเดินทาง</label>
+                            <div className="time-input-wrapper">
+                              <Clock size={14} />
+                              <TimeSelect24 value={leg.startTime} onChange={val => updateLeg(day.id, leg.id, 'startTime', val)} />
+                            </div>
+                          </div>
+
+                          <div className="detail-item">
+                            <label>ระยะเวลาเดินทาง</label>
+                            <div className="duration-inputs">
+                              <input type="number" placeholder="ชม." value={leg.durationHours} onChange={e => updateLeg(day.id, leg.id, 'durationHours', e.target.value)} />
+                              <span>:</span>
+                              <input type="number" placeholder="นาที" value={leg.durationMinutes} onChange={e => updateLeg(day.id, leg.id, 'durationMinutes', e.target.value)} />
+                            </div>
+                          </div>
+
+                          <div className="detail-item">
+                            <label>เวลาถึงปลายทาง</label>
+                            <div className="time-input-wrapper" style={{ background: 'rgba(56, 189, 248, 0.05)', borderColor: 'rgba(56, 189, 248, 0.2)' }}>
+                              <span className={leg.isNextDay ? "text-orange-400 font-bold" : "text-sky-400 font-bold"}>
+                                {leg.endTime || '--:--'}
+                              </span>
+                              {leg.isNextDay && <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded ml-1 font-bold">+1 วัน</span>}
+                            </div>
+                          </div>
+
+                          <div className="detail-item">
+                            <label>ราคา/ระยะทาง</label>
+                            {leg.type === 'private' ? (
+                              <div className="cost-input-v2">
+                                <input type="number" placeholder="กม." value={leg.distance} onChange={e => updateLeg(day.id, leg.id, 'distance', e.target.value)} />
+                                <span className="unit">กม.</span>
+                              </div>
+                            ) : (
+                              <div className="cost-input-v2">
+                                <input 
+                                  type="number" 
+                                  value={leg.isContinuation ? 0 : leg.price}
+                                  onChange={e => updateLeg(day.id, leg.id, 'price', e.target.value)}
+                                  disabled={leg.isContinuation}
+                                  placeholder="บาท"
+                                />
+                                <span className="unit">฿</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
 
-                      {leg.type === 'private' && (
-                        <div className="private-car-tools">
-                          <button type="button" className="btn-gps" onClick={() => handlePinLocation(day.id, leg.id, 'ต้นทาง')}>
-                            <MapPin size={14} /> ปักหมุดต้นทาง
-                          </button>
-                          <button type="button" className="btn-gps" onClick={() => handlePinLocation(day.id, leg.id, 'ปลายทาง')}>
-                            <Map size={14} /> ปักหมุดปลายทาง
-                          </button>
-                          <input type="number" placeholder="ระยะทาง (กม.)" value={leg.distance} onChange={e => updateLeg(day.id, leg.id, 'distance', e.target.value)} className="distance-input" />
-                        </div>
-                      )}
-
-                      {leg.isContinuation && (
-                        <div className="continuation-label-v2" style={{ background: 'rgba(255,255,255,0.05)', padding: '8pt', borderRadius: '4pt', marginBottom: '8pt', borderLeft: '3px solid #6366f1' }}>
-                          <div className="flex items-center gap-2 text-indigo-300 font-bold">
-                            <ArrowRightLeft size={14} /> รายการเดินทางต่อเนื่อง (ข้ามวัน)
+                        {leg.type === 'private' && (
+                          <div className="leg-actions-row">
+                            <button type="button" className="btn-action-outline" onClick={() => handlePinLocation(day.id, leg.id, 'ต้นทาง')}>
+                              <MapPin size={14} /> ปักหมุดต้นทาง
+                            </button>
+                            <button type="button" className="btn-action-outline" onClick={() => handlePinLocation(day.id, leg.id, 'ปลายทาง')}>
+                              <Map size={14} /> ปักหมุดปลายทาง
+                            </button>
+                            <div className="flex-1"></div>
+                            <label className="checkbox-modern">
+                              <input type="checkbox" checked={leg.crossDistrict} onChange={e => updateLeg(day.id, leg.id, 'crossDistrict', e.target.checked)} />
+                              <span className="checkbox-box"></span>
+                              <span>ข้ามเขตจังหวัด</span>
+                            </label>
                           </div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            เดินทางต่อจาก {leg.from} โดยจะไม่นำจำนวนเงินมาคิดซ้ำในส่วนนี้
-                          </div>
-                        </div>
-                      )}
+                        )}
 
-                      <div className="leg-bottom-row">
-                        <div className="cost-input-wrapper">
-                          <label>จำนวนเงิน (บาท)</label>
-                          <input
-                            type="number"
-                            value={leg.isContinuation ? 0 : leg.price}
-                            onChange={e => updateLeg(day.id, leg.id, 'price', e.target.value)}
-                            disabled={leg.isContinuation}
-                            className={leg.isContinuation ? 'input-disabled' : ''}
-                            placeholder={leg.isContinuation ? "รวมอยู่ในวันแรกแล้ว" : "0"}
-                          />
-                        </div>
-                        <label className="checkbox-styled">
-                          <input type="checkbox" checked={leg.crossDistrict} onChange={e => updateLeg(day.id, leg.id, 'crossDistrict', e.target.checked)} />
-                          <span className="checkmark"></span>
-                          เดินทางข้ามเขต
-                        </label>
+                        {leg.type !== 'private' && (
+                          <div className="leg-actions-row">
+                            <div className="flex-1"></div>
+                            <label className="checkbox-modern">
+                              <input type="checkbox" checked={leg.crossDistrict} onChange={e => updateLeg(day.id, leg.id, 'crossDistrict', e.target.checked)} />
+                              <span className="checkbox-box"></span>
+                              <span>เดินทางข้ามเขต</span>
+                            </label>
+                          </div>
+                        )}
+
+                        {leg.isContinuation && (
+                          <div className="continuation-info">
+                            <ArrowRightLeft size={12} />
+                            <span>เดินทางต่อเนื่อง (ข้ามวัน) - ไม่คิดเงินซ้ำ</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -816,16 +995,26 @@ const TravelDisbursementForm = ({ onComplete, onSave, initialData }) => {
               </div>
             ))}
 
-            <button type="button" className="btn-add-day-premium" onClick={addDay}>
-              <div className="btn-content">
-                <Calendar size={24} />
-                <div className="text-stack">
-                  <span className="main-text">เพิ่มวันเดินทางใหม่</span>
-                  <span className="sub-text">คลิกเพื่อเพิ่มรายละเอียดพาหนะสำหรับวันถัดไป</span>
-                </div>
+            <div className="flex flex-col gap-4 mt-6">
+              <div className="flex gap-4">
+                <button type="button" onClick={addDay} className="btn-add-day-premium flex-1" style={{ margin: 0 }}>
+                  <div className="btn-content">
+                    <Calendar size={20} />
+                    <div className="text-stack">
+                      <span className="main-text" style={{ fontSize: '1rem' }}>เพิ่มวันเดินทางใหม่</span>
+                    </div>
+                  </div>
+                  <Plus size={18} />
+                </button>
+                {formData.tripType === 'round-trip-auto' && (
+                  <button type="button" className="btn-auto-reverse flex-1" onClick={generateReturnLegs} style={{ background: 'var(--accent)', color: 'black', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
+                    <ArrowRightLeft size={20} /> สร้างรายการขากลับอัตโนมัติ
+                  </button>
+                )}
               </div>
-              <Plus size={20} className="plus-icon" />
-            </button>
+
+
+            </div>
           </div>
 
           <div className="form-actions-dual sticky-footer print-action">
