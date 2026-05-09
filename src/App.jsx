@@ -138,7 +138,7 @@ function App() {
       const next = prev + 1;
       if (next >= 5) {
         const pass = prompt('กรุณาใส่รหัสผ่านเข้าสู่ Dashboard:');
-        if (pass === 'SDC2024') {
+        if (pass === 'SDC2026') {
           // ใช้ path สัมพัทธ์เพื่อให้รองรับ GitHub Pages (ที่อาจมี sub-folder)
           const url = 'survey-dashboard.html';
           const newWindow = window.open(url, '_blank');
