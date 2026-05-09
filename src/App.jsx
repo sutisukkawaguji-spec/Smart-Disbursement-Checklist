@@ -139,13 +139,11 @@ function App() {
       if (next >= 5) {
         const pass = prompt('กรุณาใส่รหัสผ่านเข้าสู่ Dashboard:');
         if (pass === 'SDC2024') {
-          // ย้ายไป public/ แล้วเรียกจาก root path
-          const url = '/survey-dashboard.html';
+          // ใช้ path สัมพัทธ์เพื่อให้รองรับ GitHub Pages (ที่อาจมี sub-folder)
+          const url = 'survey-dashboard.html';
           const newWindow = window.open(url, '_blank');
           
-          // ตรวจสอบว่า Browser บล็อก Popup หรือไม่
           if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-            // ถ้าโดนบล็อก ให้เปิดในหน้าเดิมแทน
             window.location.href = url;
           }
         } else if (pass !== null) {
