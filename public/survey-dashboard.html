@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survey Dashboard - SDC System</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin: 0;
+            color: var(--accent);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Filter Controls */
+        .filter-section {
+            background: var(--card-bg);
+            padding: 1.25rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        select {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            outline: none;
+            min-width: 150px;
+            cursor: pointer;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+        }
+
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 2px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+            vertical-align: top;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .rating-stars {
+            color: #fbbf24;
+            letter-spacing: 2px;
+        }
+
+        .timestamp {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .comment-text {
+            line-height: 1.6;
+        }
+
+        .btn-refresh {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(56, 189, 248, 0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .selected-row {
+            background: rgba(56, 189, 248, 0.1) !important;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 1rem;">กำลังดึงข้อมูลความพึงพอใจ...</p>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>SDC Satisfaction Dashboard</h1>
+            <button class="btn-refresh" onclick="fetchData()">อัปเดตข้อมูล</button>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div id="total-count" class="stat-value">-</div>
+                <div class="stat-label">จำนวนผู้ประเมินทั้งหมด</div>
+            </div>
+            <div id="filtered-stat" class="stat-card" style="display: none; border-color: var(--accent);">
+                <div id="filtered-count" class="stat-value">-</div>
+                <div class="stat-label">จำนวนที่แสดงตามตัวกรอง</div>
+            </div>
+            <div class="stat-card">
+                <div id="avg-rating" class="stat-value">-</div>
+                <div id="avg-level" class="stat-label" style="color: var(--accent); font-weight: bold; font-size: 1.1rem; margin-top: 0.2rem;">ระดับความพึงพอใจ</div>
+                <div class="stat-label">คะแนนเฉลี่ย (ตามกลุ่มที่เลือก)</div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-group">
+                <label class="filter-label">กรองตามเดือน</label>
+                <select id="filter-month" onchange="applyFilters()">
+                    <option value="all">ทุกเดือน</option>
+                    <option value="0">มกราคม</option>
+                    <option value="1">กุมภาพันธ์</option>
+                    <option value="2">มีนาคม</option>
+                    <option value="3">เมษายน</option>
+                    <option value="4">พฤษภาคม</option>
+                    <option value="5">มิถุนายน</option>
+                    <option value="6">กรกฎาคม</option>
+                    <option value="7">สิงหาคม</option>
+                    <option value="8">กันยายน</option>
+                    <option value="9">ตุลาคม</option>
+                    <option value="10">พฤศจิกายน</option>
+                    <option value="11">ธันวาคม</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">คะแนน (ดาว)</label>
+                <select id="filter-stars" onchange="applyFilters()">
+                    <option value="all">ทั้งหมด</option>
+                    <option value="5">5 ดาว</option>
+                    <option value="4">4 ดาว</option>
+                    <option value="3">3 ดาว</option>
+                    <option value="2">2 ดาว</option>
+                    <option value="1">1 ดาว</option>
+                </select>
+            </div>
+            <div class="filter-group" style="justify-content: flex-end; padding-bottom: 5px; margin-left: auto;">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="filter-selected" onchange="applyFilters()">
+                    แสดงเฉพาะที่คัดเลือกไว้
+                </label>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="card">
+                <h3 style="margin-top: 0;">สัดส่วนคะแนน</h3>
+                <div class="chart-container">
+                    <canvas id="ratingChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3 style="margin-top: 0;">ความคิดเห็นและข้อเสนอแนะ</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">คัดเลือก</th>
+                                <th style="width: 120px;">วันที่</th>
+                                <th style="width: 100px;">คะแนน</th>
+                                <th>ข้อเสนอแนะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comment-body">
+                            <!-- Data inserts here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcAq3J0MsDfN9ND2E-m5b6dhvSLfn3r55moOkonBBK7JweyvcPqDAlyL0V79iKlHTm5w/exec';
+        let rawData = [];
+        let myChart = null;
+        let selectedIds = new Set(); // Store timestamp or unique ID of selected rows
+
+        async function fetchData() {
+            document.getElementById('loading').style.display = 'flex';
+            try {
+                const response = await fetch(APPS_SCRIPT_URL);
+                rawData = await response.json();
+                applyFilters();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('ไม่สามารถดึงข้อมูลได้');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function applyFilters() {
+            const monthFilter = document.getElementById('filter-month').value;
+            const starFilter = document.getElementById('filter-stars').value;
+            const onlySelected = document.getElementById('filter-selected').checked;
+
+            const filteredData = rawData.filter(item => {
+                const date = new Date(item.timestamp);
+                
+                const matchMonth = monthFilter === 'all' || date.getMonth() === Number(monthFilter);
+                const matchStar = starFilter === 'all' || Math.round(Number(item.rating)) === Number(starFilter);
+                const matchSelected = !onlySelected || selectedIds.has(item.timestamp);
+                
+                return matchMonth && matchStar && matchSelected;
+            });
+
+            renderDashboard(filteredData);
+        }
+
+        function renderDashboard(data) {
+            // Stats
+            document.getElementById('total-count').textContent = rawData.length;
+            
+            if (data.length !== rawData.length) {
+                document.getElementById('filtered-stat').style.display = 'block';
+                document.getElementById('filtered-count').textContent = data.length;
+            } else {
+                document.getElementById('filtered-stat').style.display = 'none';
+            }
+
+            const avg = data.length > 0 ? (data.reduce((acc, curr) => acc + (Number(curr.rating) || 0), 0) / data.length).toFixed(2) : 0;
+            document.getElementById('avg-rating').textContent = avg;
+
+            let level = '-';
+            let color = 'var(--text-muted)';
+            if (avg >= 4.5) { level = 'ดีเยี่ยม'; color = '#10b981'; }
+            else if (avg >= 3.5) { level = 'ดี'; color = '#34d399'; }
+            else if (avg >= 2.5) { level = 'ปานกลาง'; color = '#fbbf24'; }
+            else if (avg >= 1.5) { level = 'พอใช้'; color = '#f59e0b'; }
+            else if (avg > 0) { level = 'ควรปรับปรุง'; color = '#f87171'; }
+            
+            const levelEl = document.getElementById('avg-level');
+            levelEl.textContent = level;
+            levelEl.style.color = color;
+
+            // Chart
+            updateChart(data);
+
+            // Table
+            const body = document.getElementById('comment-body');
+            body.innerHTML = '';
+            
+            data.slice().reverse().forEach((row) => {
+                const isSelected = selectedIds.has(row.timestamp);
+                const tr = document.createElement('tr');
+                if (isSelected) tr.classList.add('selected-row');
+
+                const date = new Date(row.timestamp);
+                const dateStr = date.toLocaleDateString('th-TH') + '<br><span style="font-size: 0.7rem; opacity: 0.5;">' + date.toLocaleTimeString('th-TH') + '</span>';
+                const stars = '★'.repeat(Number(row.rating)) + '☆'.repeat(5 - Number(row.rating));
+
+                tr.innerHTML = `
+                    <td class="checkbox-container">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRow('${row.timestamp}', this)">
+                    </td>
+                    <td class="timestamp">${dateStr}</td>
+                    <td class="rating-stars">${stars}</td>
+                    <td class="comment-text">${row.comment || '<span style="opacity: 0.2">ไม่มีความเห็น</span>'}</td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function updateChart(data) {
+            const counts = [0, 0, 0, 0, 0];
+            data.forEach(d => {
+                const r = Math.round(Number(d.rating));
+                if (r >= 1 && r <= 5) counts[r-1]++;
+            });
+
+            const ctx = document.getElementById('ratingChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['1 ดาว', '2 ดาว', '3 ดาว', '4 ดาว', '5 ดาว'],
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: '#38bdf8',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function toggleRow(id, checkbox) {
+            if (checkbox.checked) {
+                selectedIds.add(id);
+                checkbox.closest('tr').classList.add('selected-row');
+            } else {
+                selectedIds.delete(id);
+                checkbox.closest('tr').classList.remove('selected-row');
+                
+                // If "Only Selected" filter is ON, we need to refresh to hide this row
+                if (document.getElementById('filter-selected').checked) {
+                    applyFilters();
+                }
+            }
+        }
+
+        fetchData();
+    </script>
+</body>
+</html>
