@@ -123,12 +123,39 @@ function App() {
   const [showSurveyPanel, setShowSurveyPanel] = useState(false);
   const [surveyRating, setSurveyRating] = useState(0);
   const [surveyComment, setSurveyComment] = useState('');
+  const [isSubmittingSurvey, setIsSubmittingSurvey] = useState(false);
+  const [triggerPrintAfterSurvey, setTriggerPrintAfterSurvey] = useState(false);
+  const [secretClickCount, setSecretClickCount] = useState(0);
   const printRef = React.useRef();
 
   const [searchTerm, setSearchTerm] = useState('');
   const fileHandlesRef = React.useRef(new Map());
 
   const [downloadItems, setDownloadItems] = useState(DOWNLOAD_CENTER);
+
+  const handleSecretTrigger = () => {
+    setSecretClickCount(prev => {
+      const next = prev + 1;
+      if (next >= 5) {
+        const pass = prompt('กรุณาใส่รหัสผ่านเข้าสู่ Dashboard:');
+        if (pass === 'SDC2024') {
+          // ย้ายไป public/ แล้วเรียกจาก root path
+          const url = '/survey-dashboard.html';
+          const newWindow = window.open(url, '_blank');
+          
+          // ตรวจสอบว่า Browser บล็อก Popup หรือไม่
+          if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            // ถ้าโดนบล็อก ให้เปิดในหน้าเดิมแทน
+            window.location.href = url;
+          }
+        } else if (pass !== null) {
+          alert('รหัสผ่านไม่ถูกต้องครับ');
+        }
+        return 0;
+      }
+      return next;
+    });
+  };
 
   // Load Dynamic Downloads
   useEffect(() => {
@@ -418,7 +445,7 @@ function App() {
       return;
     }
     setSelectedCategory(id);
-      setSelectedRequest(null);
+    setSelectedRequest(null);
     setActiveView('category-view');
     window.scrollTo(0, 0);
   };
@@ -448,31 +475,57 @@ function App() {
   };
 
   const handleSubmitHeaderSurvey = async () => {
-    if (surveyRating === 0) {
-      alert('กรุณาเลือกคะแนนความพึงพอใจด้วยครับ');
+    if (surveyRating === 0 || isSubmittingSurvey) {
+      if (surveyRating === 0) alert('กรุณาเลือกคะแนนความพึงพอใจด้วยครับ');
       return;
     }
-    
+
+    setIsSubmittingSurvey(true);
     const surveyData = {
       rating: surveyRating,
       comment: surveyComment,
+      category: selectedCategory || 'ทั่วไป',
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent
     };
 
     console.log('Survey Submitted:', surveyData);
-    
-    // ตรงนี้คือจุดเชื่อมต่อ Google Sheets (AppScript) ในอนาคต
-    // fetch('YOUR_APPS_SCRIPT_URL', { 
-    //   method: 'POST', 
-    //   mode: 'no-cors',
-    //   body: JSON.stringify(surveyData) 
-    // });
+
+    // นำ URL ที่ได้จาก Google Apps Script (Deployment ID) มาใส่ที่นี่
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcAq3J0MsDfN9ND2E-m5b6dhvSLfn3r55moOkonBBK7JweyvcPqDAlyL0V79iKlHTm5w/exec';
+
+    if (APPS_SCRIPT_URL) {
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors', // สำคัญสำหรับ Apps Script
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(surveyData)
+        });
+      } catch (error) {
+        console.error('Error submitting survey:', error);
+      }
+    }
 
     alert('ขอบคุณสำหรับข้อเสนอแนะนะครับ! ความคิดเห็นของท่านจะนำไปปรับปรุงระบบต่อไป');
     setShowSurveyPanel(false);
     setSurveyRating(0);
     setSurveyComment('');
+    setIsSubmittingSurvey(false);
+
+    if (triggerPrintAfterSurvey) {
+      setTriggerPrintAfterSurvey(false);
+      // Delay slightly to let modal close
+      setTimeout(() => {
+        document.body.classList.add('printing-mode');
+        window.print();
+        setTimeout(() => {
+          document.body.classList.remove('printing-mode');
+        }, 500);
+      }, 300);
+    }
   };
 
   const getNextSequence = (catId) => {
@@ -563,9 +616,9 @@ function App() {
       setTravelRequests(prev => {
         const itemToDelete = prev.find(r => String(r.id) === String(id));
         if (!itemToDelete) return prev;
-        
+
         const filtered = prev.filter(r => String(r.id) !== String(id));
-        
+
         // Re-index sequences for the same category to keep them continuous
         const catId = itemToDelete.categoryId;
         let seq = 1;
@@ -680,6 +733,13 @@ function App() {
   };
 
   const handlePrint = () => {
+    setTriggerPrintAfterSurvey(true);
+    setShowSurveyPanel(true);
+  };
+
+  const executePrint = () => {
+    setTriggerPrintAfterSurvey(false);
+    setShowSurveyPanel(false);
     document.body.classList.add('printing-mode');
     setTimeout(() => {
       window.print();
@@ -812,56 +872,70 @@ function App() {
         <div className="header-actions">
           <div className="flex flex-col items-end gap-2">
             <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Smart Disbursement Checklist</div>
-            
+
             <div className="survey-trigger-container">
               {!showSurveyPanel ? (
-                <button 
+                <button
                   className="btn-survey-trigger"
                   onClick={() => setShowSurveyPanel(true)}
                 >
-                  <Star size={14} /> ประเมินความพึงพอใจ
+                  <Star size={14} /> ประเมินความพึงพอใจ / แจ้งปัญหา
                 </button>
               ) : (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  className="header-survey-panel glass-card"
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-sky-300">ความพึงพอใจการใช้งาน</span>
-                    <button className="btn-close-survey" onClick={() => setShowSurveyPanel(false)}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                  
-                  <div className="flex gap-1 justify-center mb-3">
-                    {[1, 2, 3, 4, 5].map(v => (
-                      <button
-                        key={v}
-                        className={`star-btn-small ${surveyRating >= v ? 'active' : ''}`}
-                        onClick={() => setSurveyRating(v)}
-                        onMouseEnter={() => setSurveyRating(v)}
-                      >
-                        <Star size={18} fill={surveyRating >= v ? "currentColor" : "none"} />
-                      </button>
-                    ))}
-                  </div>
-
-                  <textarea 
-                    className="survey-textarea"
-                    placeholder="แสดงความคิดเห็นปรับปรุงแก้ไขระบบให้คำแนะนำ..."
-                    rows="2"
-                    value={surveyComment}
-                    onChange={(e) => setSurveyComment(e.target.value)}
-                  />
-
-                  <button 
-                    className="btn-submit-survey"
-                    onClick={handleSubmitHeaderSurvey}
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className="header-survey-panel glass-card"
                   >
-                    ส่งความเห็น
-                  </button>
-                </motion.div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-bold text-sky-300">ความพึงพอใจการใช้งาน</span>
+                      <button className="btn-close-survey" onClick={() => setShowSurveyPanel(false)}>
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div className="flex gap-1 justify-center mb-3">
+                      {[1, 2, 3, 4, 5].map(v => (
+                        <button
+                          key={v}
+                          className={`star-btn-small ${surveyRating >= v ? 'active' : ''}`}
+                          onClick={() => setSurveyRating(v)}
+                          onMouseEnter={() => setSurveyRating(v)}
+                        >
+                          <Star size={18} fill={surveyRating >= v ? "currentColor" : "none"} />
+                        </button>
+                      ))}
+                    </div>
+
+                    <textarea
+                      className="survey-textarea"
+                      placeholder="แสดงความคิดเห็นปรับปรุงแก้ไขระบบให้คำแนะนำ..."
+                      rows="2"
+                      value={surveyComment}
+                      onChange={(e) => setSurveyComment(e.target.value)}
+                    />
+
+                    <button
+                      className="btn-submit-survey"
+                      onClick={handleSubmitHeaderSurvey}
+                      disabled={isSubmittingSurvey}
+                    >
+                      {isSubmittingSurvey ? 'กำลังส่งข้อมูล...' : (triggerPrintAfterSurvey ? 'ส่งความเห็นและไปหน้าพิมพ์' : 'ส่งความเห็น')}
+                    </button>
+
+                    {triggerPrintAfterSurvey && (
+                      <button
+                        className="btn-outline-small full-width mt-3"
+                        onClick={executePrint}
+                        style={{ padding: '0.8rem', borderRadius: '0.8rem' }}
+                      >
+                        ข้ามไปพิมพ์เลย
+                      </button>
+                    )}
+                  </motion.div>
+                  <div className="survey-overlay" onClick={() => setShowSurveyPanel(false)} />
+                </>
               )}
             </div>
           </div>
@@ -1457,7 +1531,13 @@ function App() {
                               <span>นางสาวสุกัญญา ไปปอด (นักวิเคราะห์นโยบายและแผน)</span>
                               <span>นางสาวจุฑามณี เทียงปา (เจ้าหน้าที่จัดผลประโยชน์)</span>
                               <span>นางสาวสุพัตรา ผิวเพชร (เจ้าหน้าที่จัดผลประโยชน์)</span>
-                              <span>นายสุธิศักดิ์ คาวากุจิ (นายช่างสำรวจ)</span>
+                              <span 
+                                onClick={handleSecretTrigger} 
+                                style={{ cursor: 'pointer', userSelect: 'none' }}
+                                title="คลิก 5 ครั้งเพื่อเข้าสู่ระบบหลังบ้าน"
+                              >
+                                นายสุธิศักดิ์ คาวากุจิ (นายช่างสำรวจ)
+                              </span>
                               <span>นายสุวัตน์ สุราช (เจ้าหน้าที่จัดผลประโยชน์)</span>
                               <span>นางสาวสุพัตรา บุญหล้า (เจ้าหน้าที่จัดผลประโยชน์)</span>
                             </div>
