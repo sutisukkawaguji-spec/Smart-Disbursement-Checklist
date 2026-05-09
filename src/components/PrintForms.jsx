@@ -105,7 +105,10 @@ const PrintForms = forwardRef(({ data }, ref) => {
 
     const duration = calculateDuration();
 
-    const totalAllowance = safeNumber(data.allowanceRate) * safeNumber(data.allowanceDays);
+    const rawAllowance = safeNumber(data.allowanceRate) * safeNumber(data.allowanceDays);
+    const mealRate = safeNumber(data.allowanceRate) / 3;
+    const mealDeduction = safeNumber(data.mealCount) * mealRate;
+    const totalAllowance = rawAllowance - mealDeduction;
     const totalAccommodation = safeNumber(data.accommodationRate) * safeNumber(data.accommodationDays);
 
     let allLegs = [];
@@ -113,8 +116,10 @@ const PrintForms = forwardRef(({ data }, ref) => {
 
     for (let i = 0; i < rawItinerary.length; i++) {
       const day = rawItinerary[i];
+      if (!day || !day.legs) continue;
       for (let j = 0; j < (day.legs || []).length; j++) {
         const leg = day.legs[j];
+        if (!leg) continue;
 
         // If this is a continuation, we find the "parent" leg and update it instead of adding a new row
         if (leg.isContinuation && allLegs.length > 0) {
@@ -199,20 +204,34 @@ const PrintForms = forwardRef(({ data }, ref) => {
               <div className="mb-3 font-bold">เรียน {clean((data.approverPosition || '').split('ปฏิบัติราชการแทน')[0])}</div>
 
               <div className="indent-text lh-gov" style={{ letterSpacing: `${spacings.p1}px` }}>
-                ตามคำสั่ง/บันทึก ที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.orderNumber)}&nbsp;&nbsp;</span> ลงวันที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(formatThaiDate(data.orderDate))}&nbsp;&nbsp;</span> ได้อนุมัติให้ข้าพเจ้า <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.name)}&nbsp;&nbsp;</span> ตำแหน่ง <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.position)}&nbsp;&nbsp;</span> สังกัด <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.department)}&nbsp;&nbsp;</span> กรมธนารักษ์ เดินทางไปปฏิบัติราชการ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.purpose)}&nbsp;&nbsp;</span> ณ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.destination)}&nbsp;&nbsp;</span> โดยออกเดินทางจาก {data.departFrom} ตั้งแต่ วันที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(formatThaiDate(data.departDate))}&nbsp;&nbsp;</span> เวลา <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.departTime)}&nbsp;&nbsp;</span> น. และกลับถึง {data.returnTo} วันที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(formatThaiDate(data.returnDate))}&nbsp;&nbsp;</span> เวลา <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.returnTime)}&nbsp;&nbsp;</span> น. รวมเวลาไปราชการครั้งนี้ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(duration.days)}&nbsp;&nbsp;</span> วัน <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(duration.hours)}&nbsp;&nbsp;</span> ชั่วโมง
+                ตามคำสั่ง/บันทึก ที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.orderNumber)}&nbsp;&nbsp;</span> ลงวันที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(formatThaiDate(data.orderDate))}&nbsp;&nbsp;</span> ได้อนุมัติให้ข้าพเจ้า <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.name)}&nbsp;&nbsp;</span> ตำแหน่ง <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.position)}&nbsp;&nbsp;</span> สังกัด <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.department)}&nbsp;&nbsp;</span> กรมธนารักษ์ เดินทางไปปฏิบัติราชการ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.purpose)} {data.eventStartDate ? `ระหว่างวันที่ ${formatThaiDate(data.eventStartDate)}${data.eventEndDate ? ` ถึงวันที่ ${formatThaiDate(data.eventEndDate)}` : ''}` : ''}&nbsp;&nbsp;</span> ณ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.destination)}&nbsp;&nbsp;</span> โดยออกเดินทางจาก {data.departFrom} ตั้งแต่ วันที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(formatThaiDate(data.departDate))}&nbsp;&nbsp;</span> เวลา <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.departTime)}&nbsp;&nbsp;</span> น. และกลับถึง {data.returnTo} วันที่ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(formatThaiDate(data.returnDate))}&nbsp;&nbsp;</span> เวลา <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.returnTime)}&nbsp;&nbsp;</span> น. รวมเวลาไปราชการครั้งนี้ <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(duration.days)}&nbsp;&nbsp;</span> วัน <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(duration.hours)}&nbsp;&nbsp;</span> ชั่วโมง
               </div>
 
               <div className="indent-text mt-3" style={{ letterSpacing: `${spacings.p1}px` }}>ข้าพเจ้าขอเบิกค่าใช้จ่ายในการเดินทางไปราชการสำหรับ {data.travelType === 'group' ? 'คณะเดินทาง' : 'ข้าพเจ้า'} ดังนี้</div>
 
               <table className="summary-table mt-2">
                 <tbody>
-                  <tr>
-                    <td style={{ width: '60%' }}>ค่าเบี้ยเลี้ยงเดินทาง อัตรา <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.allowanceRate)}&nbsp;&nbsp;</span> บาทต่อวัน</td>
-                    <td style={{ width: '20%' }}>จำนวน <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.allowanceDays)}&nbsp;&nbsp;</span> วัน</td>
+                   <tr>
+                    <td style={{ width: '60%' }}>
+                      ค่าเบี้ยเลี้ยงเดินทาง {data.mealCount > 0 ? (
+                        <>
+                          อัตรา {clean(data.allowanceRate)} บาท/วัน ({clean(data.allowanceRate)}x{clean(data.allowanceDays)} วัน) 
+                          <span style={{ color: 'red' }}> - มื้ออาหาร ({safeNumber(data.mealCount)} มื้อ x {Math.round(data.allowanceRate/3)} บ.)</span>
+                        </>
+                      ) : (
+                        <>อัตรา <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.allowanceRate)}&nbsp;&nbsp;</span> บาทต่อวัน</>
+                      )}
+                    </td>
+                    <td style={{ width: '20%' }}>{data.mealCount <= 0 && <>จำนวน <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.allowanceDays)}&nbsp;&nbsp;</span> วัน</>}</td>
                     <td style={{ width: '20%' }} className="text-right">รวม <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(totalAllowance.toLocaleString())}&nbsp;&nbsp;</span> บาท</td>
                   </tr>
                   <tr>
-                    <td>ค่าเช่าที่พัก จำนวน <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.accommodationDays)}&nbsp;&nbsp;</span> วัน</td>
+                    <td>
+                      ค่าเช่าที่พัก {data.accommodationType && data.accommodationType !== '-' ? `(${data.accommodationType})` : ''} 
+                      {data.accommodationType !== '-' && (
+                        <> จำนวน <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{clean(data.accommodationDays)}&nbsp;&nbsp;</span> วัน</>
+                      )}
+                    </td>
                     <td></td>
                     <td className="text-right">รวม <span style={{ borderBottom: '1px dotted black' }}>&nbsp;&nbsp;{totalAccommodation.toLocaleString()}&nbsp;&nbsp;</span> บาท</td>
                   </tr>
@@ -292,28 +311,10 @@ const PrintForms = forwardRef(({ data }, ref) => {
                 <div className="font-bold">หมายเหตุ</div>
                 <div style={{ fontSize: '13pt' }}>
                   <div style={{ fontSize: '13pt', lineHeight: '1.4' }}>
-                    {(() => {
-                      const isAutoReverse = data.tripType === 'round-trip-auto';
-                      let displayItinerary = data.itinerary || [];
-                      if (isAutoReverse) displayItinerary = displayItinerary.filter(d => d.direction === 'outbound');
-
-                      return (
-                        <>
-                          {displayItinerary.map((day, idx) => (
-                            <div key={idx} style={{ marginBottom: '2pt' }}>
-                              {idx + 1}. วันที่ {formatThaiDate(day.date)} {(day.legs || []).map((leg, lIdx) => (
-                                <span key={lIdx}>
-                                  {lIdx > 0 ? ' และ ' : ''}ออกเดินทางจาก {leg.from || ''} ไปยัง {leg.to || ''}
-                                  {leg.startTime ? ` เวลา ${leg.startTime} น.` : ''}
-                                  {leg.endTime ? ` ถึงที่หมายเวลา ${leg.endTime} น.` : ''}
-                                </span>
-                              ))}
-                            </div>
-                          ))}
-                          {isAutoReverse && <div className="mt-1 font-bold">- เดินทางไปกลับ รายละเอียดตามแบบ บก.111 ที่แนบ</div>}
-                        </>
-                      );
-                    })()}
+                    {data.eventStartDate && (
+                      <div>ผู้จัดได้เลี้ยงอาหารระหว่าง {clean(data.purpose)} วันที่ {formatThaiDate(data.eventStartDate)} {data.eventEndDate ? `ถึงวันที่ ${formatThaiDate(data.eventEndDate)}` : ''}</div>
+                    )}
+                    <div className={data.eventStartDate ? 'mt-1' : ''}>ค่าเบี้ยเลี้ยงเดินทาง อัตรา {data.allowanceRate} บาท/วัน ({data.allowanceRate}x{data.allowanceDays} วัน) {Number(data.mealCount) > 0 ? `- มื้ออาหาร (${data.mealCount} มื้อ x ${Math.round(data.allowanceRate / 3)} บ.)` : ''}</div>
                   </div>
                 </div>
               </div>
@@ -381,7 +382,9 @@ const PrintForms = forwardRef(({ data }, ref) => {
                           {!leg.isMultiDay && leg.endTime && ` ถึงที่หมายเวลา ${leg.endTime} น.`}
                         </td>
                         <td className="text-right">{safeNumber(leg.price).toLocaleString()}</td>
-                        <td></td>
+                        <td className="text-center" style={{ fontSize: '10pt', lineHeight: '1.1', padding: '2px', verticalAlign: 'middle' }}>
+                          {leg.type === 'hired' ? 'การเดินทางไปราชการครั้งนี้ มีสัมภาระ จึงจำเป็นต้องจ้างรถรับจ้าง' : ''}
+                        </td>
                       </tr>
                     );
                   });
@@ -413,9 +416,19 @@ const PrintForms = forwardRef(({ data }, ref) => {
               <div style={{ marginTop: '5pt' }}>
                 และข้าพเจ้าได้จ่ายไปในงานของราชการโดยแท้
               </div>
+
             </div>
 
-            <div className="signature-block" style={{ marginLeft: 'auto', marginRight: '30pt', width: '220pt', textAlign: 'center', marginTop: '40pt' }}>
+            {data.itineraryNote && (
+              <div className="mt-4 lh-gov no-print-break">
+                <div className="font-bold">หมายเหตุเพิ่มเติม:</div>
+                <div style={{ borderBottom: '1px dotted black', minHeight: '30pt', padding: '5pt 0' }}>
+                  {clean(data.itineraryNote)}
+                </div>
+              </div>
+            )}
+
+            <div className="signature-block" style={{ marginLeft: 'auto', marginRight: '30pt', width: '220pt', textAlign: 'center', marginTop: '30pt' }}>
               <div>ลงชื่อ.........................................................</div>
               <div className="mt-2">( {clean(data.name)} )</div>
               <div className="mt-1">วันที่ {getDay(new Date())} {formatThaiMonthYear(new Date())}</div>
@@ -431,15 +444,15 @@ const PrintForms = forwardRef(({ data }, ref) => {
               <div className="text-right font-bold" style={{ fontSize: '16pt' }}>แบบ 8708 ส่วนที่ 2</div>
               <h2 className="text-center mb-1">หลักฐานการจ่ายเงินค่าใช้จ่ายในการเดินทางไปราชการ</h2>
               <div className="text-center mb-4">
-                ส่วนราชการ <span className="dotted-line" style={{ minWidth: '150pt' }}>{clean(data.department)}</span> จังหวัด <span className="dotted-line" style={{ minWidth: '80pt' }}>บึงกาฬ</span>
+                ส่วนราชการ <span className="dotted-line" style={{ minWidth: '150pt' }}>{clean(data.department)}</span> จังหวัด <span className="dotted-line" style={{ minWidth: '80pt' }}>{clean(data.province) || 'บึงกาฬ'}</span>
               </div>
 
               <table className="print-table w-full" style={{ fontSize: '11pt' }}>
                 <thead>
                   <tr>
                     <th rowSpan={2} style={{ width: '30pt' }}>ลำดับที่</th>
-                    <th rowSpan={2} style={{ width: '180pt' }}>ชื่อ - นามสกุล</th>
-                    <th rowSpan={2} style={{ width: '120pt' }}>ตำแหน่ง</th>
+                    <th rowSpan={2} style={{ width: '220pt' }}>ชื่อ - นามสกุล</th>
+                    <th rowSpan={2} style={{ width: '130pt' }}>ตำแหน่ง</th>
                     <th colSpan={4}>ค่าใช้จ่าย</th>
                     <th rowSpan={2} style={{ width: '70pt' }}>รวมเงิน</th>
                     <th rowSpan={2} style={{ width: '100pt' }}>ลายมือชื่อผู้รับเงิน</th>
@@ -470,12 +483,12 @@ const PrintForms = forwardRef(({ data }, ref) => {
                   </tr>
                   {/* Team Members */}
                   {(data.team || []).map((member, mIdx) => {
+                    if (!member) return null;
                     // Re-calculate based on smart rules for each member
-                    const mAllowanceDays = Number(member.allowanceDays) || 0;
-                    const mAllowance = safeNumber(member.allowanceRate || data.allowanceRate) * mAllowanceDays;
-                    const mAccommodationDays = Number(member.accommodationDays) || 0;
-                    const mAccommodation = safeNumber(member.accommodationRate || data.accommodationRate) * mAccommodationDays;
-                    const mTransport = safeNumber(member.transport) || 0;
+                    // Automatically use main requester's rates and days
+                    const mAllowance = totalAllowance; // Now includes meal deduction same as main requester
+                    const mAccommodation = totalAccommodation; // Same as main requester
+                    const mTransport = totalTransport; // Users requested transport same as main requester
                     const mTotal = mAllowance + mAccommodation + mTransport;
 
                     return (
@@ -497,11 +510,11 @@ const PrintForms = forwardRef(({ data }, ref) => {
                   {/* Totals */}
                   <tr className="font-bold">
                     <td colSpan={3} className="text-center">รวมเงินทั้งสิ้น</td>
-                    <td className="text-right">{(totalAllowance + (data.team || []).reduce((s, m) => s + (safeNumber(m.allowanceRate) * safeNumber(m.allowanceDays)), 0)).toLocaleString()}</td>
-                    <td className="text-right">{(totalAccommodation + (data.team || []).reduce((s, m) => s + (safeNumber(m.accommodationRate) * safeNumber(m.accommodationDays)), 0)).toLocaleString()}</td>
-                    <td className="text-right">{totalTransport.toLocaleString()}</td>
+                    <td className="text-right">{(totalAllowance + (data.team || []).length * totalAllowance).toLocaleString()}</td>
+                    <td className="text-right">{(totalAccommodation + (data.team || []).length * totalAccommodation).toLocaleString()}</td>
+                    <td className="text-right">{(totalTransport + (data.team || []).length * totalTransport).toLocaleString()}</td>
                     <td className="text-right">-</td>
-                    <td className="text-right" style={{ background: '#eee' }}>{(totalAll + (data.team || []).reduce((s, m) => s + (safeNumber(m.allowanceRate) * safeNumber(m.allowanceDays) + safeNumber(m.accommodationRate) * safeNumber(m.accommodationDays)), 0)).toLocaleString()}</td>
+                    <td className="text-right" style={{ background: '#eee' }}>{(totalAll + (data.team || []).length * (totalAllowance + totalAccommodation + totalTransport)).toLocaleString()}</td>
                     <td colSpan={3} style={{ background: '#eee' }}></td>
                   </tr>
                 </tbody>
@@ -509,7 +522,12 @@ const PrintForms = forwardRef(({ data }, ref) => {
 
               <div className="mt-5" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ width: '45%' }}>
-                  <div>จำนวนเงินรวมทั้งสิ้น (ตัวอักษร) <span className="dotted-line" style={{ width: '100%' }}>....................................................................................</span></div>
+                  {(() => {
+                    const grandTotalGroup = totalAll + (data.team || []).length * (totalAllowance + totalAccommodation + totalTransport);
+                    return (
+                      <div>จำนวนเงินรวมทั้งสิ้น (ตัวอักษร) <span className="dotted-line" style={{ width: '100%' }}>{bahtText(grandTotalGroup)}</span></div>
+                    );
+                  })()}
                 </div>
                 <div style={{ width: '50%', textAlign: 'center' }}>
                   <div style={{ marginBottom: '40pt', marginTop: '80pt' }}>
