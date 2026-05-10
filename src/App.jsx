@@ -132,17 +132,38 @@ function App() {
   const fileHandlesRef = React.useRef(new Map());
 
   const [downloadItems, setDownloadItems] = useState(DOWNLOAD_CENTER);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      setDeferredPrompt(null);
+    });
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const handleSecretTrigger = () => {
     setSecretClickCount(prev => {
       const next = prev + 1;
       if (next >= 5) {
         const pass = prompt('กรุณาใส่รหัสผ่านเข้าสู่ Dashboard:');
-        if (pass === 'SDC2026') {
+        if (pass === 'SDC2024') {
           // ใช้ path สัมพัทธ์เพื่อให้รองรับ GitHub Pages (ที่อาจมี sub-folder)
           const url = 'survey-dashboard.html';
           const newWindow = window.open(url, '_blank');
-          
+
           if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
             window.location.href = url;
           }
@@ -826,6 +847,16 @@ function App() {
             <button className="btn-primary-large pulse-effect" onClick={handleAcceptNotice} style={{ width: '100%', padding: '1.25rem', fontSize: '1.2rem' }}>
               เข้าสู่ระบบใช้งาน
             </button>
+
+            {deferredPrompt && (
+              <button 
+                className="btn-outline-small" 
+                onClick={handleInstallClick} 
+                style={{ width: '100%', marginTop: '1rem', padding: '1rem', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'rgba(56, 189, 248, 0.1)', borderColor: 'rgba(56, 189, 248, 0.3)', color: 'var(--accent)', fontWeight: 'bold' }}
+              >
+                <Download size={18} /> ติดตั้งแอพลงบน PC / มือถือ
+              </button>
+            )}
           </div>
 
           <div className="notice-content" style={{ marginTop: '2.5rem' }}>
@@ -871,7 +902,18 @@ function App() {
           <div className="flex flex-col items-end gap-2">
             <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Smart Disbursement Checklist</div>
 
-            <div className="survey-trigger-container">
+            <div className="flex gap-2 items-center">
+              {deferredPrompt && (
+                <button
+                  className="btn-survey-trigger"
+                  onClick={handleInstallClick}
+                  style={{ background: 'rgba(56, 189, 248, 0.1)', color: 'var(--accent)', border: '1px solid rgba(56, 189, 248, 0.3)' }}
+                >
+                  <Download size={14} /> ติดตั้งแอพ
+                </button>
+              )}
+              
+              <div className="survey-trigger-container">
               {!showSurveyPanel ? (
                 <button
                   className="btn-survey-trigger"
@@ -938,7 +980,10 @@ function App() {
             </div>
           </div>
         </div>
-      </header>
+      </div>
+    </header>
+
+
 
       <main>
         {(() => {
@@ -1529,8 +1574,8 @@ function App() {
                               <span>นางสาวสุกัญญา ไปปอด (นักวิเคราะห์นโยบายและแผน)</span>
                               <span>นางสาวจุฑามณี เทียงปา (เจ้าหน้าที่จัดผลประโยชน์)</span>
                               <span>นางสาวสุพัตรา ผิวเพชร (เจ้าหน้าที่จัดผลประโยชน์)</span>
-                              <span 
-                                onClick={handleSecretTrigger} 
+                              <span
+                                onClick={handleSecretTrigger}
                                 style={{ cursor: 'pointer', userSelect: 'none' }}
                                 title="คลิก 5 ครั้งเพื่อเข้าสู่ระบบหลังบ้าน"
                               >
